@@ -76,6 +76,8 @@ class supply_router(router):
                 # Create the graph
                 g = graph(self)
                 g.create_graph(source, target)
+                # debug
+                debug.warning("graph creat success!")
                 # Find the shortest path from source to target
                 path = g.find_shortest_path()
                 # If no path is found, throw an error

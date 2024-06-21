@@ -5,6 +5,7 @@
 # (acting for and on behalf of Oklahoma State University)
 # All rights reserved.
 #
+# This file generate sram part, aiming at using openroad to do the P&R
 import os
 import shutil
 import datetime
@@ -49,16 +50,9 @@ class sram():
 
         self.name = name
 
-        from openram.modules.sram_1bank import sram_1bank as sram
-        #from openram.modules.sram_new import sram_1bank as sram
+        #from openram.modules.sram_1bank import sram_1bank as sram
+        from openram.modules.sram_part import sram_1bank as sram
         self.s = sram(name, sram_config)
-
-        self.s.create_netlist()
-        if not OPTS.netlist_only:
-            self.s.create_layout()
-
-        if not OPTS.is_unit_test:
-            print_time("SRAM creation", datetime.datetime.now(), start_time)
 
     def get_sp_name(self):
         if OPTS.use_pex:
@@ -95,56 +89,35 @@ class sram():
             else:
                 f.write(str(var_name) + " = " + str(var_value)+ "\n")
         f.close()
-
-    def save(self):
-        """ Save all the output files while reporting time to do it as well. """
-
+        
+    def generate_files(self, module_name):
+        """use to generate gds, lef files for one certain layout"""
         # Import this at the last minute so that the proper tech file
         # is loaded and the right tools are selected
         from openram import verify
         from openram.characterizer import functional
         from openram.characterizer import delay
-
+        
         # Save the spice file
         start_time = datetime.datetime.now()
-        spname = OPTS.output_path + self.s.name + ".sp"
+        spname = OPTS.output_path + self.s.name + module_name + ".sp"
         debug.print_raw("SP: Writing to {0}".format(spname))
         self.sp_write(spname)
 
-        # Save a functional simulation file with default period
-        functional(self.s,
-                   spname,
-                   cycles=200,
-                   output_path=OPTS.output_path)
         print_time("Spice writing", datetime.datetime.now(), start_time)
 
-        # Save stimulus and measurement file
-        start_time = datetime.datetime.now()
-        debug.print_raw("DELAY: Writing stimulus...")
-        d = delay(self.s, spname, ("TT", 5, 25), output_path=OPTS.output_path)
-        if (self.s.num_spare_rows == 0):
-            probe_address = "1" * self.s.addr_size
-        else:
-            probe_address = "0" + "1" * (self.s.addr_size - 1)
-        probe_data = self.s.word_size - 1
-        d.analysis_init(probe_address, probe_data)
-        d.targ_read_ports.extend(self.s.read_ports)
-        d.targ_write_ports = [self.s.write_ports[0]]
-        d.write_delay_stimulus()
-        print_time("DELAY", datetime.datetime.now(), start_time)
-
         # Save trimmed spice file
-        temp_trim_sp = "{0}trimmed.sp".format(OPTS.output_path)
+        temp_trim_sp = "{0}trimmed_{1}.sp".format(OPTS.output_path, module_name)
         self.sp_write(temp_trim_sp, lvs=False, trim=True)
 
         if not OPTS.netlist_only:
             # Write the layout
             start_time = datetime.datetime.now()
-            gdsname = OPTS.output_path + self.s.name + ".gds"
+            gdsname = OPTS.output_path + self.s.name + module_name + ".gds"
             debug.print_raw("GDS: Writing to {0}".format(gdsname))
             self.gds_write(gdsname)
             if OPTS.check_lvsdrc:
-                verify.write_drc_script(cell_name=self.s.name,
+                verify.write_drc_script(cell_name=self.s.name + module_name,
                                         gds_name=os.path.basename(gdsname),
                                         extract=True,
                                         final_verification=True,
@@ -153,18 +126,18 @@ class sram():
 
             # Create a LEF physical model
             start_time = datetime.datetime.now()
-            lefname = OPTS.output_path + self.s.name + ".lef"
+            lefname = OPTS.output_path + self.s.name + module_name + ".lef"
             debug.print_raw("LEF: Writing to {0}".format(lefname))
             self.lef_write(lefname)
             print_time("LEF", datetime.datetime.now(), start_time)
 
         # Save the LVS file
         start_time = datetime.datetime.now()
-        lvsname = OPTS.output_path + self.s.name + ".lvs.sp"
+        lvsname = OPTS.output_path + self.s.name + module_name + ".lvs.sp"
         debug.print_raw("LVS: Writing to {0}".format(lvsname))
         self.sp_write(lvsname, lvs=True)
         if not OPTS.netlist_only and OPTS.check_lvsdrc:
-            verify.write_lvs_script(cell_name=self.s.name,
+            verify.write_lvs_script(cell_name=self.s.name + module_name,
                                     gds_name=os.path.basename(gdsname),
                                     sp_name=os.path.basename(lvsname),
                                     final_verification=True,
@@ -175,21 +148,14 @@ class sram():
         if OPTS.use_pex:
             start_time = datetime.datetime.now()
             # Output the extracted design if requested
-            pexname = OPTS.output_path + self.s.name + ".pex.sp"
-            spname = OPTS.output_path + self.s.name + ".sp"
+            pexname = OPTS.output_path + self.s.name + module_name + ".pex.sp"
+            spname = OPTS.output_path + self.s.name + module_name + ".sp"
             verify.run_pex(self.s.name, gdsname, spname, output=pexname)
             sp_file = pexname
             print_time("Extraction", datetime.datetime.now(), start_time)
         else:
             # Use generated spice file for characterization
             sp_file = spname
-
-        # Characterize the design
-        start_time = datetime.datetime.now()
-        from openram.characterizer import lib
-        debug.print_raw("LIB: Characterizing... ")
-        lib(out_dir=OPTS.output_path, sram=self.s, sp_file=sp_file)
-        print_time("Characterization", datetime.datetime.now(), start_time)
 
         # Write the config file
         start_time = datetime.datetime.now()
@@ -201,13 +167,6 @@ class sram():
         debug.print_raw("Config: Writing to {0}".format(OPTS.output_path + OPTS.output_name + '.py'))
         print_time("Config", datetime.datetime.now(), start_time)
 
-        # Write the datasheet
-        start_time = datetime.datetime.now()
-        from openram.datasheet import datasheet_gen
-        dname = OPTS.output_path + self.s.name + ".html"
-        debug.print_raw("Datasheet: Writing to {0}".format(dname))
-        datasheet_gen.datasheet_write(dname)
-        print_time("Datasheet", datetime.datetime.now(), start_time)
 
         # Write a verilog model
         start_time = datetime.datetime.now()
@@ -223,3 +182,72 @@ class sram():
             debug.print_raw("Extended Config: Writing to {0}".format(oname))
             self.extended_config_write(oname)
             print_time("Extended Config", datetime.datetime.now(), start_time)
+        
+         
+    def save(self):
+        """ Save all the output files while reporting time to do it as well. """ 
+        for i in range(7):
+            if i == 0:
+                self.s.create_netlist_bank()
+                if not OPTS.netlist_only:
+                    self.s.create_layout_bank_only()
+                self.generate_files("bank")
+            elif i == 1:
+                self.s.create_netlist_control()
+                if not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.s.create_layout_control_only(self, instance_index=port)
+                        self.generate_files("control_" + port)
+                else:
+                    for port in self.s.all_ports:
+                        self.generate_files("control_" + port)
+            elif i == 2:
+                self.s.create_netlist_row_addr_dff()
+                if not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.s.create_layout_row_addr_dff_only(self, instance_index=port)
+                        self.generate_files("row_addr_dff_" + port)
+                else: 
+                    for port in self.s.all_ports:
+                        self.generate_files("row_addr_dff_" + port)
+            elif i == 3:    
+                if self.s.create_netlist_col_addr_dff() == False: 
+                    continue # do not need col addr dff
+                elif not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.create_layout_col_addr_dff_only(self, instance_index=port)
+                        self.generate_files("col_addr_dff_" + port)
+                else:
+                    self.generate_files("col_addr_dff_" + port)
+            elif i == 4:     
+                self.s.create_netlist_data_dff()   
+                if not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.s.create_layout_data_dff_only(self, instance_index=port)
+                        self.generate_files("data_dff_" + port)
+                else:
+                    for port in self.s.all_ports:
+                        self.generate_files("data_dff_" + port)
+            elif i == 5:
+                if self.s.create_netlist_wmask_dff() == False:
+                    continue # do not need wmask dff
+                elif not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.s.create_layout_wmask_dff_only(self, instance_index=port)
+                        self.generate_files("wmask_dff_" + port)
+                else: 
+                    for port in self.s.all_ports:
+                        self.generate_files("wmask_dff_" + port)
+            elif i == 6:   
+                if self.s.create_netlist_spare_wen_dff() == False:
+                    continue # do not need spare wen dff 
+                elif not OPTS.netlist_only:
+                    for port in self.s.all_ports:
+                        self.s.create_layout_spare_wen_dff_only(self, instance_index=port) 
+                        self.generate_files("spare_wen_dff_" + port)    
+                else:
+                    for port in self.s.all_ports:
+                        self.generate_files("spare_wen_dff_" + port)
+
+                
+                
