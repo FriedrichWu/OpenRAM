@@ -184,70 +184,69 @@ class sram():
             print_time("Extended Config", datetime.datetime.now(), start_time)
         
          
-    def save(self):
+    def save(self, mod=0):
         """ Save all the output files while reporting time to do it as well. """ 
-        for i in range(7):
-            if i == 0:
-                self.s.create_netlist_bank()
-                if not OPTS.netlist_only:
-                    self.s.create_layout_bank_only()
-                self.generate_files("bank")
-            elif i == 1:
-                self.s.create_netlist_control()
-                if not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.s.create_layout_control_only(self, instance_index=port)
-                        self.generate_files("control_" + port)
-                else:
-                    for port in self.s.all_ports:
-                        self.generate_files("control_" + port)
-            elif i == 2:
-                self.s.create_netlist_row_addr_dff()
-                if not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.s.create_layout_row_addr_dff_only(self, instance_index=port)
-                        self.generate_files("row_addr_dff_" + port)
-                else: 
-                    for port in self.s.all_ports:
-                        self.generate_files("row_addr_dff_" + port)
-            elif i == 3:    
-                if self.s.create_netlist_col_addr_dff() == False: 
-                    continue # do not need col addr dff
-                elif not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.create_layout_col_addr_dff_only(self, instance_index=port)
-                        self.generate_files("col_addr_dff_" + port)
-                else:
-                    self.generate_files("col_addr_dff_" + port)
-            elif i == 4:     
-                self.s.create_netlist_data_dff()   
-                if not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.s.create_layout_data_dff_only(self, instance_index=port)
-                        self.generate_files("data_dff_" + port)
-                else:
-                    for port in self.s.all_ports:
-                        self.generate_files("data_dff_" + port)
-            elif i == 5:
-                if self.s.create_netlist_wmask_dff() == False:
-                    continue # do not need wmask dff
-                elif not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.s.create_layout_wmask_dff_only(self, instance_index=port)
-                        self.generate_files("wmask_dff_" + port)
-                else: 
-                    for port in self.s.all_ports:
-                        self.generate_files("wmask_dff_" + port)
-            elif i == 6:   
-                if self.s.create_netlist_spare_wen_dff() == False:
-                    continue # do not need spare wen dff 
-                elif not OPTS.netlist_only:
-                    for port in self.s.all_ports:
-                        self.s.create_layout_spare_wen_dff_only(self, instance_index=port) 
-                        self.generate_files("spare_wen_dff_" + port)    
-                else:
-                    for port in self.s.all_ports:
-                        self.generate_files("spare_wen_dff_" + port)
+        if mod == 0:
+            self.s.create_netlist_bank()
+            if not OPTS.netlist_only:
+                self.s.create_layout_bank_only()
+            self.generate_files("_bank")
+        elif mod == 1:
+            self.s.create_netlist_control()
+            if not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.s.create_layout_control_only(instance_index=port)
+                    self.generate_files("_control_" + str(port))
+            else:
+                for port in self.s.all_ports:
+                    self.generate_files("_control_" + str(port))
+        elif mod == 2:
+            self.s.create_netlist_row_addr_dff()
+            if not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.s.create_layout_row_addr_dff_only(instance_index=port)
+                    self.generate_files("_row_addr_dff_" + str(port))
+            else: 
+                for port in self.s.all_ports:
+                    self.generate_files("_row_addr_dff_" + str(port))
+        elif mod == 3:    
+            if self.s.create_netlist_col_addr_dff() == False: 
+                pass#continue # do not need col addr dff
+            elif not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.create_layout_col_addr_dff_only(instance_index=port)
+                    self.generate_files("_col_addr_dff_" + str(port))
+            else:
+                self.generate_files("_col_addr_dff_" + str(port))
+        elif mod == 4:     
+            self.s.create_netlist_data_dff()   
+            if not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.s.create_layout_data_dff_only(instance_index=port)
+                    self.generate_files("_data_dff_" + str(port))
+            else:
+                for port in self.s.all_ports:
+                    self.generate_files("_data_dff_" + str(port))
+        elif mod == 5:
+            if self.s.create_netlist_wmask_dff() == False:
+                pass#continue # do not need wmask dff
+            elif not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.s.create_layout_wmask_dff_only(instance_index=port)
+                    self.generate_files("_wmask_dff_" + str(port))
+            else: 
+                for port in self.s.all_ports:
+                    self.generate_files("_wmask_dff_" + str(port))
+        elif mod == 6:   
+            if self.s.create_netlist_spare_wen_dff() == False:
+                pass#continue # do not need spare wen dff 
+            elif not OPTS.netlist_only:
+                for port in self.s.all_ports:
+                    self.s.create_layout_spare_wen_dff_only(instance_index=port) 
+                    self.generate_files("_spare_wen_dff_" + str(port))    
+            else:
+                for port in self.s.all_ports:
+                    self.generate_files("_spare_wen_dff_" + str(port))
 
                 
                 

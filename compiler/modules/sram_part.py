@@ -105,6 +105,7 @@ class sram_1bank(design, verilog, lef):
             for bit in range(self.row_addr_size):
                 #input
                 self.add_pin("addr{}[{}]".format(port, bit + self.col_addr_size), "INPUT")
+                print("addr{}[{}]".format(port, bit), "INPUT")
                 #output
                 self.add_pin("a{}_{}".format(port, bit + self.col_addr_size), "OUTPUT")
             #clk_buf, regard as input
@@ -492,7 +493,7 @@ class sram_1bank(design, verilog, lef):
         # Must create the control logic before pins to get the pins
         self.add_modules()
         self.add_pin_data_dff()
-        self.bank_inst = self.create_col_addr_dff() # be aware, multi-insts possible
+        self.data_dff_insts = self.create_data_dff() # be aware, multi-insts possible
 
         # This is for the lib file if we don't create layout
         self.width=0
@@ -510,7 +511,7 @@ class sram_1bank(design, verilog, lef):
         self.add_modules()
         if self.write_size != self.word_size:
             self.add_pin_wmask_dff()
-            self.bank_inst = self.create_wmask_dff() # be aware, multi-insts possible, or none
+            self.wmask_dff_insts = self.create_wmask_dff() # be aware, multi-insts possible, or none
 
             # This is for the lib file if we don't create layout
             self.width=0
@@ -612,8 +613,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.control_pos[port] = vector(0,0)
-        self.control_logic_insts[port].place(self.control_pos[port])
+        self.control_logic_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("Control Placement", datetime.datetime.now(), start_time)
@@ -648,8 +648,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.row_addr_pos[port] = vector(0,0)
-        self.row_addr_dff_insts[port].place(self.row_addr_pos[port])
+        self.row_addr_dff_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("row_addr_dff Placement", datetime.datetime.now(), start_time)
@@ -684,8 +683,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.col_addr_pos[port] = vector(0,0)
-        self.col_addr_dff_insts[port].place(self.col_addr_pos[port])
+        self.col_addr_dff_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("col_addr_dff Placement", datetime.datetime.now(), start_time)
@@ -720,8 +718,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.data_pos[port] = vector(0,0)
-        self.data_dff_insts[port].place(self.data_pos[port])
+        self.data_dff_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("data_dff Placement", datetime.datetime.now(), start_time)
@@ -756,8 +753,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.wmask_pos[port] = vector(0,0)
-        self.wmask_dff_insts[port].place(self.wmask_pos[port])
+        self.wmask_dff_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("wmask_dff Placement", datetime.datetime.now(), start_time)
@@ -792,8 +788,7 @@ class sram_1bank(design, verilog, lef):
         # Placement
         # We will generate different layout for different port(if there are multi-port)
         port = instance_index
-        self.spare_wen_pos[port] = vector(0,0)
-        self.spare_wen_dff_insts[port].place(self.spare_wen_pos[port])
+        self.spare_wen_dff_insts[port].place(vector(0,0))
         
         if not OPTS.is_unit_test:
             print_time("spare_wen_dff Placement", datetime.datetime.now(), start_time)
@@ -1005,7 +1000,7 @@ class sram_1bank(design, verilog, lef):
         if OPTS.route_supplies:
             self.route_supplies(init_bbox)  
                   
-    def add_layout_spare_wen_dff_only_pins(self, instance_index=0):
+    def add_pins_to_route_spare_wen_dff(self, instance_index=0):
         #only contains signal pins, no power pins
         """ Adding to route pins for spare wen dff """
         pins_to_route = []
@@ -1021,7 +1016,7 @@ class sram_1bank(design, verilog, lef):
         
         return pins_to_route
     
-    def add_pins_to_route_spare_wen_dff(self, add_vias=True, instance_index=0):
+    def add_layout_spare_wen_dff_only_pins(self, add_vias=True, instance_index=0):
         """
         Add the top-level pins for a single bank SRAM with control.
         """
@@ -1039,17 +1034,17 @@ class sram_1bank(design, verilog, lef):
         for bit in range(self.num_spare_cols):
             # input
             self.add_io_pin(self.spare_wen_dff_insts[port],
-                            "spare_wen{}[{}]".format(port, bit), # old name
+                            "din_{}".format(bit), # old name
                             "spare_wen{}[{}]".format(port, bit), # new name
                             start_layer=pin_layer)
             # output
             self.add_io_pin(self.spare_wen_dff_insts[port],
-                            "bank_spare_wen{}_{}".format(port, bit), 
+                            "dout_{}".format(port, bit), 
                             "bank_spare_wen{}_{}".format(port, bit),
                             start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_io_pin(self.spare_wen_dff_insts[port],
-                        "clk_buf{}".format(port), 
+                        "clk", 
                         "clk_buf{}".format(port),
                         start_layer=pin_layer)
     
@@ -1086,17 +1081,17 @@ class sram_1bank(design, verilog, lef):
         for bit in range(self.num_wmasks):
             # input
             self.add_io_pin(self.wmask_dff_insts[port],
-                            "wmask{}[{}]".format(port, bit), 
+                            "din_{}".format(bit), 
                             "wmask{}[{}]".format(port, bit),
                             start_layer=pin_layer)
             # output
             self.add_io_pin(self.wmask_dff_insts[port],
-                            "bank_wmask{}_{}".format(port, bit),
+                            "dout_{}".format(bit),
                             "bank_wmask{}_{}".format(port, bit),
                             start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_io_pin(self.wmask_dff_insts[port],
-                        "clk_buf{}".format(port), 
+                        "clk", 
                         "clk_buf{}".format(port),
                         start_layer=pin_layer)                    
 
@@ -1133,17 +1128,17 @@ class sram_1bank(design, verilog, lef):
         for bit in range(self.word_size + self.num_spare_cols):
             # input
             self.add_io_pin(self.data_dff_insts[port],
-                            "din{}[{}]".format(port, bit), 
+                            "din_{}".format(bit), 
                             "din{}[{}]".format(port, bit),
                             start_layer=pin_layer)
             # output
             self.add_io_pin(self.data_dff_insts[port],
-                            "bank_din{}_{}".format(port, bit), 
+                            "dout_{}".format(bit), 
                             "bank_din{}_{}".format(port, bit),
                             start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_io_pin(self.data_dff_insts[port],
-                        "clk_buf{}".format(port),
+                        "clk",
                         "clk_buf{}".format(port),
                         start_layer=pin_layer)
     
@@ -1180,17 +1175,17 @@ class sram_1bank(design, verilog, lef):
         for bit in range(self.col_addr_size):
             #input
             self.add_io_pin(self.col_addr_dff_insts[port],
-                            "addr{}[{}]".format(port, bit), # old name 
+                            "din_{}".format(bit), # old name 
                             "addr{}[{}]".format(port, bit), # new name
                             start_layer=pin_layer)
             #output
             self.add_io_pin(self.col_addr_dff_insts[port],
-                            "a{}_{}".format(port, bit), 
+                            "dout_{}".format(bit), 
                             "a{}_{}".format(port, bit),
                             start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_pin(self.col_addr_dff_insts[port],
-                     "clk_buf{}".format(port), 
+                     "clk", 
                      "clk_buf{}".format(port),
                      start_layer=pin_layer)
 
@@ -1226,18 +1221,21 @@ class sram_1bank(design, verilog, lef):
  
         for bit in range(self.row_addr_size):
             #input
+            #debug
+            print("this is port number:{0}".format(port))
+            print("insts:{0}".format(self.row_addr_dff_insts[port]))
             self.add_io_pin(self.row_addr_dff_insts[port],
-                            "addr{}[{}]".format(port, bit + self.col_addr_size), # old name 
+                            "din_{}".format(bit + self.col_addr_size), # old name 
                             "addr{}[{}]".format(port, bit + self.col_addr_size), # new name
                            start_layer=pin_layer)
             #output
             self.add_io_pin(self.row_addr_dff_insts[port],
-                            "a{}_{}".format(port, bit + self.col_addr_size), 
+                            "dout_{}".format(bit + self.col_addr_size), 
                             "a{}_{}".format(port, bit + self.col_addr_size),
                             start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_io_pin(self.row_addr_dff_insts[port],
-                        "clk_buf{}".format(port), 
+                        "clk", 
                         "clk_buf{}".format(port),
                         start_layer=pin_layer)
             
@@ -1280,45 +1278,45 @@ class sram_1bank(design, verilog, lef):
             pin_layer = self.pwr_grid_layers[0]
         
         # Inputs
-        self.add_io_pin(self.control_insts[port],
-                        "csb{}".format(port), #old name
+        self.add_io_pin(self.control_logic_insts[port],
+                        "csb", #old name
                         "csb{}".format(port), #new name
                         start_layer=pin_layer)
         if port in self.readwrite_ports:
-            self.add_io_pin(self.control_insts[port],
-                            "web{}".format(port), 
+            self.add_io_pin(self.control_logic_insts[port],
+                            "web", 
                             "web{}".format(port),
                             start_layer=pin_layer)
-        self.add_io_pin(self.control_insts[port],
-                        "clk{}".format(port), 
+        self.add_io_pin(self.control_logic_insts[port],
+                        "clk", 
                         "clk{}".format(port),
                         start_layer=pin_layer)
         if self.has_rbl:
-            self.add_io_pin(self.control_insts[port],
-                            "rbl_bl{}".format(port),
+            self.add_io_pin(self.control_logic_insts[port],
+                            "rbl_bl",
                             "rbl_bl{}".format(port),
                             start_layer=pin_layer)
         # Outputs
         if port in self.read_ports:
-            self.add_io_pin(self.control_insts[port],
-                            "s_en{}".format(port), 
+            self.add_io_pin(self.control_logic_insts[port],
+                            "s_en", 
                             "s_en{}".format(port),
                             start_layer=pin_layer)
         if port in self.write_ports:
-            self.add_io_pin(self.control_insts[port],
-                            "w_en{}".format(port), 
+            self.add_io_pin(self.control_logic_insts[port],
+                            "w_en", 
                             "w_en{}".format(port),
                             start_layer=pin_layer)
-        self.add_io_pin(self.control_insts[port],
-                        "p_en_bar{}".format(port), 
+        self.add_io_pin(self.control_logic_insts[port],
+                        "p_en_bar", 
                         "p_en_bar{}".format(port),
                         start_layer=pin_layer)
-        self.add_io_pin(self.control_insts[port],
-                        "wl_en{}".format(port), 
+        self.add_io_pin(self.control_logic_insts[port],
+                        "wl_en", 
                         "wl_en{}".format(port),
                         start_layer=pin_layer)
-        self.add_io_pin(self.control_insts[port],
-                     "clk_buf{}".format(port),
+        self.add_io_pin(self.control_logic_insts[port],
+                     "clk_buf",
                      "clk_buf{}".format(port),
                      start_layer=pin_layer)            
                         
