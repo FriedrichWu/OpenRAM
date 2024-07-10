@@ -21,7 +21,7 @@ class sram():
     results.
     We can later add visualizer and other high-level functions as needed.
     """
-    def __init__(self, sram_config=None, name=None):
+    def __init__(self, sram_config=None, name=None, mod=0):
 
         # Create default configs if custom config isn't provided
         if sram_config is None:
@@ -32,9 +32,24 @@ class sram():
                                  words_per_row=OPTS.words_per_row,
                                  num_spare_rows=OPTS.num_spare_rows,
                                  num_spare_cols=OPTS.num_spare_cols)
-
+        # maybe this part should be put after set_local_config, so we could calculate the number of port and define file name
         if name is None:
-            name = OPTS.output_name
+            #name = OPTS.output_name
+            if mod == 0:
+                name = OPTS.output_name + "_bank_" + "0"
+            elif mod == 1:# not consider multi-port yet!!!!!!
+                name = OPTS.output_name + "_control_" + "0"
+            elif mod == 2:
+                name = OPTS.output_name + "_row_addr_dff_" + "0"
+            elif mod == 3:
+                name = OPTS.output_name + "_col_addr_dff_" + "0"
+            elif mod == 4:
+                name = OPTS.output_name + "_data_dff_" + "0"
+            elif mod == 5:
+                name = OPTS.output_name + "_wmask_dff_" + "0"
+            elif mod == 6:
+                name = OPTS.output_name + "_spare_wen_dff_" + "0"   
+                    
 
         sram_config.set_local_config(self)
 
@@ -90,7 +105,7 @@ class sram():
                 f.write(str(var_name) + " = " + str(var_value)+ "\n")
         f.close()
         
-    def generate_files(self, module_name):
+    def generate_files(self):
         """use to generate gds, lef files for one certain layout"""
         # Import this at the last minute so that the proper tech file
         # is loaded and the right tools are selected
@@ -100,24 +115,24 @@ class sram():
         
         # Save the spice file
         start_time = datetime.datetime.now()
-        spname = OPTS.output_path + self.s.name + module_name + ".sp"
+        spname = OPTS.output_path + self.s.name + ".sp"
         debug.print_raw("SP: Writing to {0}".format(spname))
         self.sp_write(spname)
 
         print_time("Spice writing", datetime.datetime.now(), start_time)
 
         # Save trimmed spice file
-        temp_trim_sp = "{0}trimmed_{1}.sp".format(OPTS.output_path, module_name)
+        temp_trim_sp = "{0}trimmed.sp".format(OPTS.output_path)
         self.sp_write(temp_trim_sp, lvs=False, trim=True)
 
         if not OPTS.netlist_only:
             # Write the layout
             start_time = datetime.datetime.now()
-            gdsname = OPTS.output_path + self.s.name + module_name + ".gds"
+            gdsname = OPTS.output_path + self.s.name + ".gds"
             debug.print_raw("GDS: Writing to {0}".format(gdsname))
             self.gds_write(gdsname)
             if OPTS.check_lvsdrc:
-                verify.write_drc_script(cell_name=self.s.name + module_name,
+                verify.write_drc_script(cell_name=self.s.name,
                                         gds_name=os.path.basename(gdsname),
                                         extract=True,
                                         final_verification=True,
@@ -126,18 +141,18 @@ class sram():
 
             # Create a LEF physical model
             start_time = datetime.datetime.now()
-            lefname = OPTS.output_path + self.s.name + module_name + ".lef"
+            lefname = OPTS.output_path + self.s.name + ".lef"
             debug.print_raw("LEF: Writing to {0}".format(lefname))
             self.lef_write(lefname)
             print_time("LEF", datetime.datetime.now(), start_time)
 
         # Save the LVS file
         start_time = datetime.datetime.now()
-        lvsname = OPTS.output_path + self.s.name + module_name + ".lvs.sp"
+        lvsname = OPTS.output_path + self.s.name + ".lvs.sp"
         debug.print_raw("LVS: Writing to {0}".format(lvsname))
         self.sp_write(lvsname, lvs=True)
         if not OPTS.netlist_only and OPTS.check_lvsdrc:
-            verify.write_lvs_script(cell_name=self.s.name + module_name,
+            verify.write_lvs_script(cell_name=self.s.name,
                                     gds_name=os.path.basename(gdsname),
                                     sp_name=os.path.basename(lvsname),
                                     final_verification=True,
@@ -148,8 +163,8 @@ class sram():
         if OPTS.use_pex:
             start_time = datetime.datetime.now()
             # Output the extracted design if requested
-            pexname = OPTS.output_path + self.s.name + module_name + ".pex.sp"
-            spname = OPTS.output_path + self.s.name + module_name + ".sp"
+            pexname = OPTS.output_path + self.s.name + ".pex.sp"
+            spname = OPTS.output_path + self.s.name + ".sp"
             verify.run_pex(self.s.name, gdsname, spname, output=pexname)
             sp_file = pexname
             print_time("Extraction", datetime.datetime.now(), start_time)
@@ -190,63 +205,63 @@ class sram():
             self.s.create_netlist_bank()
             if not OPTS.netlist_only:
                 self.s.create_layout_bank_only()
-            self.generate_files("_bank")
+            self.generate_files()
         elif mod == 1:
             self.s.create_netlist_control()
             if not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.s.create_layout_control_only(instance_index=port)
-                    self.generate_files("_control_" + str(port))
+                    self.generate_files()
             else:
                 for port in self.s.all_ports:
-                    self.generate_files("_control_" + str(port))
+                    self.generate_files()
         elif mod == 2:
             self.s.create_netlist_row_addr_dff()
             if not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.s.create_layout_row_addr_dff_only(instance_index=port)
-                    self.generate_files("_row_addr_dff_" + str(port))
+                    self.generate_files()
             else: 
                 for port in self.s.all_ports:
-                    self.generate_files("_row_addr_dff_" + str(port))
+                    self.generate_files()
         elif mod == 3:    
             if self.s.create_netlist_col_addr_dff() == False: 
                 pass#continue # do not need col addr dff
             elif not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.create_layout_col_addr_dff_only(instance_index=port)
-                    self.generate_files("_col_addr_dff_" + str(port))
+                    self.generate_files()
             else:
-                self.generate_files("_col_addr_dff_" + str(port))
+                self.generate_files()
         elif mod == 4:     
             self.s.create_netlist_data_dff()   
             if not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.s.create_layout_data_dff_only(instance_index=port)
-                    self.generate_files("_data_dff_" + str(port))
+                    self.generate_files()
             else:
                 for port in self.s.all_ports:
-                    self.generate_files("_data_dff_" + str(port))
+                    self.generate_files()
         elif mod == 5:
             if self.s.create_netlist_wmask_dff() == False:
                 pass#continue # do not need wmask dff
             elif not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.s.create_layout_wmask_dff_only(instance_index=port)
-                    self.generate_files("_wmask_dff_" + str(port))
+                    self.generate_files()
             else: 
                 for port in self.s.all_ports:
-                    self.generate_files("_wmask_dff_" + str(port))
+                    self.generate_files()
         elif mod == 6:   
             if self.s.create_netlist_spare_wen_dff() == False:
                 pass#continue # do not need spare wen dff 
             elif not OPTS.netlist_only:
                 for port in self.s.all_ports:
                     self.s.create_layout_spare_wen_dff_only(instance_index=port) 
-                    self.generate_files("_spare_wen_dff_" + str(port))    
+                    self.generate_files()    
             else:
                 for port in self.s.all_ports:
-                    self.generate_files("_spare_wen_dff_" + str(port))
+                    self.generate_files()
 
                 
                 

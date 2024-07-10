@@ -77,27 +77,27 @@ s = sram_road.sram()
 s.save()
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=1)
 s.save(mod=1)
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=2)
 s.save(mod=2)
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=3)
 s.save(mod=3)
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=4)
 s.save(mod=4)
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=5)
 s.save(mod=5)
 
 del s
-s = sram_road.sram()
+s = sram_road.sram(mod=6)
 s.save(mod=6)
 
 # Delete temp files etc.
