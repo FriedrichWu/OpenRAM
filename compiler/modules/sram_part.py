@@ -80,7 +80,10 @@ class sram_1bank(design, verilog, lef):
             for bit in range(self.num_wmasks):
                 self.add_pin("bank_wmask{0}[{1}]".format(port, bit), "INPUT")
             for bit in range(self.num_spare_cols):
-                self.add_pin("bank_spare_wen{0}[{1}]".format(port, bit), "INPUT")
+                if self.num_spare_cols ==1:
+                    self.add_pin("bank_spare_wen{0}".format(port), "INPUT")
+                else:    
+                    self.add_pin("bank_spare_wen{0}[{1}]".format(port, bit), "INPUT")
         for port in self.all_ports:
             self.add_pin("wl_en{0}".format(port), "INPUT")
 
@@ -204,10 +207,16 @@ class sram_1bank(design, verilog, lef):
         # lef file use this pin name, should be same with new pin
         for port in self.all_ports:
             for bit in range(self.num_spare_cols):
-                # input
-                self.add_pin("spare_wen{}[{}]".format(port, bit), "INPUT")
-                # output
-                self.add_pin("bank_spare_wen{}[{}]".format(port, bit), "OUTPUT")
+                if self.num_spare_cols == 1:
+                    # input
+                    self.add_pin("spare_wen{}".format(port), "INPUT")
+                    # output
+                    self.add_pin("bank_spare_wen{}".format(port), "OUTPUT")
+                else:    
+                    # input
+                    self.add_pin("spare_wen{}[{}]".format(port, bit), "INPUT")
+                    # output
+                    self.add_pin("bank_spare_wen{}[{}]".format(port, bit), "OUTPUT")
             #clk_buf, regard as input
             self.add_pin("clk_buf{}".format(port), "INPUT")
             # Standard supply and ground names
@@ -1007,10 +1016,16 @@ class sram_1bank(design, verilog, lef):
         port = instance_index          
 
         for bit in range(self.num_spare_cols):
-            # input
-            pins_to_route.append("spare_wen{}[{}]".format(port, bit))
-            # output
-            pins_to_route.append("bank_spare_wen{}[{}]".format(port, bit))
+            if self.num_spare_cols == 1:
+                # input
+                pins_to_route.append("spare_wen{}".format(port))
+                # output
+                pins_to_route.append("bank_spare_wen{}".format(port))
+            else:    
+                # input
+                pins_to_route.append("spare_wen{}[{}]".format(port, bit))
+                # output
+                pins_to_route.append("bank_spare_wen{}[{}]".format(port, bit))
         #clk_buf, regard as input
         pins_to_route.append("clk_buf{}".format(port))        
         
@@ -1032,16 +1047,28 @@ class sram_1bank(design, verilog, lef):
             pin_layer = self.pwr_grid_layers[0]        
 
         for bit in range(self.num_spare_cols):
-            # input
-            self.add_io_pin(self.spare_wen_dff_insts[port],
-                            "din_{}".format(bit), # old name
-                            "spare_wen{}[{}]".format(port, bit), # new name
-                            start_layer=pin_layer)
-            # output
-            self.add_io_pin(self.spare_wen_dff_insts[port],
-                            "dout_{}".format(port, bit), 
-                            "bank_spare_wen{}[{}]".format(port, bit),
-                            start_layer=pin_layer)
+            if self.num_spare_cols == 1:
+                # input
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "din_{}".format(bit), # old name
+                                "spare_wen{}".format(port), # new name
+                                start_layer=pin_layer)
+                # output
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "dout_{}".format(bit), 
+                                "bank_spare_wen{}".format(port),
+                                start_layer=pin_layer)
+            else:
+                # input
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "din_{}".format(bit), # old name
+                                "spare_wen{}[{}]".format(port, bit), # new name
+                                start_layer=pin_layer)
+                # output
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "dout_{}".format(bit), 
+                                "bank_spare_wen{}[{}]".format(port, bit),
+                                start_layer=pin_layer)
         #clk_buf, regard as input
         self.add_io_pin(self.spare_wen_dff_insts[port],
                         "clk", 
@@ -1348,7 +1375,10 @@ class sram_1bank(design, verilog, lef):
             for bit in range(self.num_wmasks):
                 pins_to_route.append("bank_wmask{0}[{1}]".format(port, bit))
             for bit in range(self.num_spare_cols):
-                pins_to_route.append("bank_spare_wen{0}[{1}]".format(port, bit))
+                if self.num_spare_cols == 1:
+                    pins_to_route.append("bank_spare_wen{0}".format(port, bit))
+                else:
+                    pins_to_route.append("bank_spare_wen{0}[{1}]".format(port, bit))
         for port in self.all_ports:
             pins_to_route.append("wl_en{0}".format(port))
         
@@ -1419,10 +1449,16 @@ class sram_1bank(design, verilog, lef):
                                 "bank_wmask{0}[{1}]".format(port, bit),
                                 start_layer=pin_layer)
             for bit in range(self.num_spare_cols):
-                self.add_io_pin(self.bank_inst,
-                                "bank_spare_wen{0}_{1}".format(port, bit),
-                                "bank_spare_wen{0}[{1}]".format(port, bit),
-                                start_layer=pin_layer)
+                if self.num_spare_cols == 1:
+                    self.add_io_pin(self.bank_inst,
+                                    "bank_spare_wen{0}_{1}".format(port, bit),
+                                    "bank_spare_wen{0}".format(port),
+                                    start_layer=pin_layer)
+                else:
+                    self.add_io_pin(self.bank_inst,
+                                    "bank_spare_wen{0}_{1}".format(port, bit),
+                                    "bank_spare_wen{0}[{1}]".format(port, bit),
+                                    start_layer=pin_layer)
         if port in self.all_ports:
             self.add_io_pin(self.bank_inst,
                             "wl_en{0}".format(port),
