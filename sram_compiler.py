@@ -71,11 +71,11 @@ for path in output_files:
 # Create an SRAM (we can also pass sram_config, see documentation/tutorials for details)
 #from openram import sram
 #s = sram()
-from openram import sram_road
-s = sram_road.sram()
+from openram import sram_new_test
+s = sram_new_test.sram()
 # Output the files for the resulting SRAM
 s.save()
-
+'''
 del s
 s = sram_road.sram(mod=1)
 s.save(mod=1)
@@ -99,7 +99,7 @@ s.save(mod=5)
 del s
 s = sram_road.sram(mod=6)
 s.save(mod=6)
-
+'''
 # Delete temp files etc.
 openram.end_openram()
 openram.print_time("End", datetime.datetime.now(), start_time)
