@@ -63,7 +63,7 @@ class sram():
                     self.s.create_layout_recrusive(position_add=i)
                 except AssertionError as e:
                     supply_route_not_found = True
-                    if i == 99:# failed in rounting
+                    if i == (99 + OPTS.word_size):# failed in rounting
                         debug.error("Failed in rounting", -1)
                         break
                         
