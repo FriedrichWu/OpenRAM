@@ -54,9 +54,37 @@ class sram():
         
         self.s = sram(name, sram_config)
         self.s.create_netlist()# not placed & routed jet
-        #self.s_tmp = copy.deepcopy(self.s) # need deepcopy
         if not OPTS.netlist_only:
             i = 0
+            supply_route_not_found = False
+            while i < (OPTS.word_size + 100):
+                print("current iteration: i = {0}".format(i))
+                try: 
+                    self.s.create_layout_recrusive(position_add=i)
+                except AssertionError as e:
+                    supply_route_not_found = True
+                    if i == 99:# failed in rounting
+                        debug.error("Failed in rounting", -1)
+                        break
+                        
+                    
+                if (supply_route_not_found):
+                    del self.s
+                    self.s = sram(name, sram_config)
+                    self.s.create_netlist()
+                    if i == 0:# after first try 
+                        i = OPTS.word_size + 20
+                    else:
+                        i = i + 1
+                    supply_route_not_found = False
+                else:# successfully routed
+                    break        
+        '''#old version
+        self.s = sram(name, sram_config)
+        self.s.create_netlist()# not placed & routed jet
+        #self.s_tmp = copy.deepcopy(self.s) # need deepcopy
+        if not OPTS.netlist_only:
+            i = 98
             supply_route_not_found = False
             #self.s_tmp = copy.deepcopy(self.s) # need deepcopy
             while i < 100:
@@ -80,7 +108,7 @@ class sram():
                 else:# successfully routed
                     #self.s = copy.deepcopy(self.s_tmp) # need deepcopy
                     break
-                    
+        '''          
         if not OPTS.is_unit_test:
             print_time("SRAM creation", datetime.datetime.now(), start_time)
 
@@ -134,14 +162,14 @@ class sram():
         spname = OPTS.output_path + self.s.name + ".sp"
         debug.print_raw("SP: Writing to {0}".format(spname))
         self.sp_write(spname)
-
+        '''   
         # Save a functional simulation file with default period
         functional(self.s,
                    spname,
                    cycles=200,
                    output_path=OPTS.output_path)
         print_time("Spice writing", datetime.datetime.now(), start_time)
-
+        
         # Save stimulus and measurement file
         start_time = datetime.datetime.now()
         debug.print_raw("DELAY: Writing stimulus...")
@@ -156,7 +184,7 @@ class sram():
         d.targ_write_ports = [self.s.write_ports[0]]
         d.write_delay_stimulus()
         print_time("DELAY", datetime.datetime.now(), start_time)
-
+        '''
         # Save trimmed spice file
         temp_trim_sp = "{0}trimmed.sp".format(OPTS.output_path)
         self.sp_write(temp_trim_sp, lvs=False, trim=True)

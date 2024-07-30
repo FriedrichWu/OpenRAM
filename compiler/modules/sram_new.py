@@ -1273,7 +1273,7 @@ class sram_1bank(design, verilog, lef):
         if len(route_map) > 0:
 
             # This layer stack must be different than the column addr dff layer stack
-            layer_stack = self.m3_stack
+            layer_stack = self.m2_stack
             if port == 0:
                 # This is relative to the bank at 0,0 or the s_en which is routed on M3 also
                 if "s_en" in self.control_logic_insts[port].mod.pin_map:

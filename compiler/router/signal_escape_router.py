@@ -24,6 +24,9 @@ class signal_escape_router(router):
 
         # New pins are the side supply pins
         self.new_pins = {}
+        
+		# Use for add distance of dout pins at the perimeter
+        self.distance = 0
 
 
     def route(self, pin_names):
@@ -205,41 +208,22 @@ class signal_escape_router(router):
             #fake_center = vector(ll.x - self.track_wire * 2, c.y) # test if here we could change the pin position at the layout
 
         # relocate the pin position
+        pattern = r'^dout'
+        if re.match(pattern, pin.name):
+            if edge == "bottom":# change to the east
+                vertical = True
+                fake_center = vector(ur.x + self.track_wire * 2, ll.y + 30 + self.distance)
+                self.distance += 1
+            else:
+                if edge == "top":# change to the west
+                    vertical = True
+                    fake_center = vector(ll.x - self.track_wire * 2, ur.y - 30 - self.distance)
+                    self.distance += 1                    
         """
         pattern = r'^addr0_1'
         if re.match(pattern, pin.name):
             vertical = True
             fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_wire * 4)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^addr0_2'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_wire * 8)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^addr0_3'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_wire*12)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^addr0_4'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_wire*16)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^p_en_bar0'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^s_en0'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_width *3)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        pattern = r'^w_en0'
-        if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_width * 6)# fix still do not know how to control the distance between every fake pin
             #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
         """
         # Create the fake pin shape
