@@ -11,7 +11,8 @@ from math import ceil
 from importlib import import_module, reload
 from openram import debug
 from openram.base import vector
-from openram.base import channel_route
+#from openram.base import channel_route
+from openram.base.channel_route_new import channel_route as channel_route
 from openram.base import design
 from openram.base import verilog
 from openram.base import lef
@@ -207,7 +208,7 @@ class sram_1bank(design, verilog, lef):
         if not OPTS.is_unit_test:
             print_time("Submodules", datetime.datetime.now(), start_time)
     
-    def create_layout_recrusive(self, position_add=0):
+    def create_layout_recrusive(self, position_add=0, mod=0):
         """ Layout creation """
         start_time = datetime.datetime.now()
         self.place_instances_changeable(position_add=position_add)
@@ -215,7 +216,12 @@ class sram_1bank(design, verilog, lef):
             print_time("Placement", datetime.datetime.now(), start_time)
 
         start_time = datetime.datetime.now()
-        self.route_layout()
+        
+        if position_add == 0:
+            change = False
+        else:
+            change = True
+        self.route_layout(change=change, mod=mod)
 
         if not OPTS.is_unit_test:
             print_time("Routing", datetime.datetime.now(), start_time)
@@ -352,7 +358,7 @@ class sram_1bank(design, verilog, lef):
             # Grid is left with many top level pins
             pass
 
-    def route_escape_pins(self, bbox=None):
+    def route_escape_pins(self, bbox=None, change=False, mod=0):
         """
         Add the top-level pins for a single bank SRAM with control.
         """
@@ -394,11 +400,18 @@ class sram_1bank(design, verilog, lef):
                 else:
                     for bit in range(self.num_spare_cols):
                         pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
-
-        from openram.router import signal_escape_router as router
-        rtr = router(layers=self.m3_stack,
-                     bbox=bbox,
-                     design=self)
+                        
+        if change == False:
+            from openram.router import signal_escape_router as router
+            rtr = router(layers=self.m3_stack,
+                         bbox=bbox,
+                         design=self)
+        else:
+            from openram.router.signal_escape_router_change import signal_escape_router_change as router
+            rtr = router(layers=self.m3_stack,
+                         bbox=bbox,
+                         design=self,
+                         mod=mod)            
         rtr.route(pins_to_route)
 
     def compute_bus_sizes(self):
@@ -1157,7 +1170,7 @@ class sram_1bank(design, verilog, lef):
                                         "spare_wen{0}[{1}]".format(port, bit),
                                         start_layer=pin_layer)
 
-    def route_layout(self):
+    def route_layout(self, change=False, mod=0):
         """ Route a single bank SRAM """
 
         self.route_clk()
@@ -1181,9 +1194,9 @@ class sram_1bank(design, verilog, lef):
         if OPTS.perimeter_pins:
             # We now route the escape routes far enough out so that they will
             # reach past the power ring or stripes on the sides
-            self.route_escape_pins(init_bbox)
+            self.route_escape_pins(bbox=init_bbox, change=change, mod=mod)
         if OPTS.route_supplies:
-            self.route_supplies(init_bbox)
+            self.route_supplies(init_bbox)      
 
 
     def route_dffs(self, add_routes=True):

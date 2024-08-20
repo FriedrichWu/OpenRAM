@@ -51,7 +51,67 @@ class sram():
         self.name = name
 
         from openram.modules.sram_new import sram_1bank as sram
-        
+
+        num_ports = OPTS.num_rw_ports + OPTS.num_r_ports + OPTS.num_w_ports
+        self.s = sram(name, sram_config)
+        self.s.create_netlist()# not placed & routed jet
+        cur_state = "IDLE"
+        if not OPTS.netlist_only:
+            i = 0
+            while i < (OPTS.word_size + 100):
+
+                print("current iteration: i = {0}".format(i))
+                debug.warning("current state: state = {0}".format(cur_state))
+                
+                if cur_state == "IDLE":# default, fisrt try
+                    try: 
+                        self.s.create_layout_recrusive(position_add=i)
+                    except AssertionError as e:
+                        cur_state = "ALL_TOP_BOTTOM"
+                        del self.s
+                        self.s = sram(name, sram_config)
+                        self.s.create_netlist()
+                        if num_ports > 1:
+                            i = 16
+                        else:
+                            i = 0 
+                        continue
+                    cur_state = "FINISH"
+                    break
+
+                elif cur_state == "ALL_TOP_BOTTOM":
+                    try:
+                        self.s.create_layout_recrusive(position_add=i, mod=1)
+                    except AssertionError as e:
+                        cur_state = "ALL_LEFT_RIGHT"
+                        i = OPTS.word_size + 24 
+                        del self.s
+                        self.s = sram(name, sram_config)
+                        self.s.create_netlist()
+                        continue
+                    cur_state = "FINISH"
+                    break
+                 
+                elif cur_state == "ALL_LEFT_RIGHT":
+                    try:
+                        self.s.create_layout_recrusive(position_add=i, mod=2)
+                    except AssertionError as e:
+                        cur_state = "ALL_LEFT_RIGHT"
+                        i = i + 1
+                        if i == (99 + OPTS.word_size):# failed in rounting
+                            debug.error("Failed in rounting", -1)
+                            break
+                        del self.s
+                        self.s = sram(name, sram_config)
+                        self.s.create_netlist() 
+                        continue
+                    cur_state = "FINISH"
+                    break
+                else:
+                    cur_state = "FINISH"
+                    break
+                                          
+        ''' # 2nd version
         self.s = sram(name, sram_config)
         self.s.create_netlist()# not placed & routed jet
         if not OPTS.netlist_only:
@@ -78,7 +138,8 @@ class sram():
                         i = i + 1
                     supply_route_not_found = False
                 else:# successfully routed
-                    break        
+                    break    
+        '''    
         '''#old version
         self.s = sram(name, sram_config)
         self.s.create_netlist()# not placed & routed jet

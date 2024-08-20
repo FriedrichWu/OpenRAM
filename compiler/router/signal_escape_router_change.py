@@ -12,18 +12,29 @@ from .graph_shape import graph_shape
 from .router import router
 import re
 
-class signal_escape_router(router):
+class signal_escape_router_change(router):
     """
     This is the signal escape router that uses the Hanan grid graph method.
     """
 
-    def __init__(self, layers, design, bbox=None):
+    def __init__(self, layers, design, bbox=None, mod=0):
 
         # `router` is the base router class
         router.__init__(self, layers, design, bbox)
 
         # New pins are the side supply pins
         self.new_pins = {}
+        
+		# Use for add distance of dout pins at the perimeter
+        self.distance_right = 0
+
+        self.distance_left = 0
+        
+		# Use for control which edge/position the pins(dout) will be placed
+        # 0 -> default
+        # 1 -> all top/bottom
+        # 2 -> all left/right
+        self.state_mod = mod
 
 
     def route(self, pin_names):
@@ -202,7 +213,49 @@ class signal_escape_router(router):
             fake_center = vector(ur.x + self.track_wire * 2, c.y)
         if edge == "top":
             fake_center = vector(c.x, ur.y + self.track_wire * 2)
-            #fake_center = vector(ll.x - self.track_wire * 2, c.y) # test if here we could change the pin position at the layout               
+            #fake_center = vector(ll.x - self.track_wire * 2, c.y) # test if here we could change the pin position at the layout
+
+        # relocate the pin position
+        pattern = r'^dout'
+        if re.match(pattern, pin.name):
+            
+            if self.state_mod == 0:
+                pass# do not change, default
+            
+            elif self.state_mod == 1: # all top/bottom
+                if edge == "right": 
+                    vertical = False
+                    fake_center = vector(c.x, ll.y - self.track_wire * 2)
+                    self.distance_right += 1
+                else:
+                    if edge == "left":
+                        vertical = False
+                        fake_center = vector(c.x, ll.y + self.track_wire * 2)
+                        self.distance_left += 1   
+            
+            elif self.state_mod == 2: # all left/right
+                if (edge == "bottom") or (edge == "right"):# change to the east
+                    vertical = True
+                    fake_center = vector(ur.x + self.track_wire * 2, ll.y + 30 + self.distance_right)
+                    self.distance_right += 1
+                else:
+                    if (edge == "top") or (edge == "left"):# change to the west
+                        vertical = True
+                        fake_center = vector(ll.x - self.track_wire * 2, ur.y - 30 - self.distance_left)
+                        self.distance_left += 1 
+            else:
+                debug.error("wrong state mod!", -1)              
+        ''' # old version
+            if edge == "bottom":# change to the east
+                vertical = True
+                fake_center = vector(ur.x + self.track_wire * 2, ll.y + 30 + self.distance_right)
+                self.distance_right += 1
+            else:
+                if edge == "top":# change to the west
+                    vertical = True
+                    fake_center = vector(ll.x - self.track_wire * 2, ur.y - 30 - self.distance_left)
+                    self.distance_left += 1     
+        '''               
         """
         pattern = r'^addr0_1'
         if re.match(pattern, pin.name):
@@ -246,6 +299,8 @@ class signal_escape_router(router):
         """ Replace the old layout pins with new ones around the perimeter. """
 
         for name, pin in self.new_pins.items():
+            print("name:{0}".format(name))
+            print("replace_pin->{0}".format(pin))
             pin = graph_shape(pin.name, pin.boundary, pin.lpp)
             # Find the intersection of this pin on the perimeter
             for fake in self.fake_pins:
@@ -253,3 +308,4 @@ class signal_escape_router(router):
                 if edge:
                     break
             self.design.replace_layout_pin(name, edge)
+            print("pass!!!!!!!")
