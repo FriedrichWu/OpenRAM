@@ -5,6 +5,7 @@
 # (acting for and on behalf of Oklahoma State University)
 # All rights reserved.
 #
+# This aim to change the position of the submodule
 import datetime
 from math import ceil
 from importlib import import_module, reload
@@ -205,16 +206,16 @@ class sram_1bank(design, verilog, lef):
 
         if not OPTS.is_unit_test:
             print_time("Submodules", datetime.datetime.now(), start_time)
-
-    def create_layout(self):
+    
+    def create_layout(self, position_add=0, mod=0):
         """ Layout creation """
         start_time = datetime.datetime.now()
-        self.place_instances()
+        self.place_instances_changeable(position_add=position_add)
         if not OPTS.is_unit_test:
             print_time("Placement", datetime.datetime.now(), start_time)
 
         start_time = datetime.datetime.now()
-        self.route_layout()
+        self.route_layout(mod=mod)
 
         if not OPTS.is_unit_test:
             print_time("Routing", datetime.datetime.now(), start_time)
@@ -238,7 +239,7 @@ class sram_1bank(design, verilog, lef):
             # Only run this if not a unit test, because unit test will also verify it.
             self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
             print_time("Verification", datetime.datetime.now(), start_time)
-
+            
     def create_modules(self):
         debug.error("Must override pure virtual function.", -1)
 
@@ -318,7 +319,7 @@ class sram_1bank(design, verilog, lef):
             # Grid is left with many top level pins
             pass
 
-    def route_escape_pins(self, bbox=None):
+    def route_escape_pins(self, bbox=None, mod=0):
         """
         Add the top-level pins for a single bank SRAM with control.
         """
@@ -360,11 +361,16 @@ class sram_1bank(design, verilog, lef):
                 else:
                     for bit in range(self.num_spare_cols):
                         pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
-
+            
         from openram.router import signal_escape_router as router
+        # mod Use for control which edge/position the pins(dout) will be placed
+        # 0 -> default
+        # 1 -> all top/bottom
+        # 2 -> all left/right
         rtr = router(layers=self.m3_stack,
                      bbox=bbox,
-                     design=self)
+                     design=self,
+                     mod=mod)            
         rtr.route(pins_to_route)
 
     def compute_bus_sizes(self):
@@ -778,11 +784,11 @@ class sram_1bank(design, verilog, lef):
             self.spare_wen_dff_insts = self.create_spare_wen_dff()
         else:
             self.num_spare_cols = 0
-
-    def place_instances(self):
+            
+    def place_instances_changeable(self, position_add=0):
         """
         This places the instances for a single bank SRAM with control
-        logic and up to 2 ports.
+        logic and up to 2 ports, but be able to change the io the dff position
         """
 
         # No orientation or offset
@@ -843,7 +849,11 @@ class sram_1bank(design, verilog, lef):
         self.add_layout_pins(add_vias=False)
         self.route_dffs(add_routes=False)
         self.remove_layout_pins()
-
+        
+        for port in self.all_ports:
+            # Add the extra position
+            self.data_bus_size[port] += position_add   
+                
         # Re-place with the new channel size
         self.place_dffs()
 
@@ -1051,7 +1061,7 @@ class sram_1bank(design, verilog, lef):
                                         "spare_wen{0}[{1}]".format(port, bit),
                                         start_layer=pin_layer)
 
-    def route_layout(self):
+    def route_layout(self, mod=0):
         """ Route a single bank SRAM """
 
         self.route_clk()
@@ -1075,7 +1085,8 @@ class sram_1bank(design, verilog, lef):
         if OPTS.perimeter_pins:
             # We now route the escape routes far enough out so that they will
             # reach past the power ring or stripes on the sides
-            self.route_escape_pins(init_bbox)
+            self.route_escape_pins(bbox=init_bbox, mod=mod)
+            
         if OPTS.route_supplies:
             self.route_supplies(init_bbox)
 
@@ -1118,7 +1129,8 @@ class sram_1bank(design, verilog, lef):
                 cr = channel_route(netlist=route_map,
                                    offset=offset,
                                    layer_stack=layer_stack,
-                                   parent=self)
+                                   parent=self,
+                                   dff_area=True)# this is a special value to handle dff areas, should be true when routing col_dff/dffs
                 # This causes problem in magic since it sometimes cannot extract connectivity of instances
                 # with no active devices.
                 self.add_inst(cr.name, cr)
@@ -1130,7 +1142,8 @@ class sram_1bank(design, verilog, lef):
                 cr = channel_route(netlist=route_map,
                                    offset=offset,
                                    layer_stack=layer_stack,
-                                   parent=self)
+                                   parent=self,
+                                   dff_area=True)# this is a special value to handle dff areas, should be true when routing col_dff/dffs
                 # This causes problem in magic since it sometimes cannot extract connectivity of instances
                 # with no active devices.
                 self.add_inst(cr.name, cr)
@@ -1167,7 +1180,7 @@ class sram_1bank(design, verilog, lef):
         if len(route_map) > 0:
 
             # This layer stack must be different than the column addr dff layer stack
-            layer_stack = self.m3_stack
+            layer_stack = self.m2_stack
             if port == 0:
                 # This is relative to the bank at 0,0 or the s_en which is routed on M3 also
                 if "s_en" in self.control_logic_insts[port].mod.pin_map:
@@ -1181,7 +1194,8 @@ class sram_1bank(design, verilog, lef):
                 cr = channel_route(netlist=route_map,
                                    offset=offset,
                                    layer_stack=layer_stack,
-                                   parent=self)
+                                   parent=self,
+                                   dff_area=True)# this is a special value to handle dff areas, should be true when routing col_dff/dffs
                 if add_routes:
                     # This causes problem in magic since it sometimes cannot extract connectivity of instances
                     # with no active devices.
@@ -1201,7 +1215,8 @@ class sram_1bank(design, verilog, lef):
                 cr = channel_route(netlist=route_map,
                                    offset=offset,
                                    layer_stack=layer_stack,
-                                   parent=self)
+                                   parent=self,
+                                   dff_area=True)# this is a special value to handle dff areas, should be true when routing col_dff/dffs
                 if add_routes:
                     # This causes problem in magic since it sometimes cannot extract connectivity of instances
                     # with no active devices.

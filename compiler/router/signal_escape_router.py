@@ -17,13 +17,24 @@ class signal_escape_router(router):
     This is the signal escape router that uses the Hanan grid graph method.
     """
 
-    def __init__(self, layers, design, bbox=None):
+    def __init__(self, layers, design, bbox=None, mod=0):
 
         # `router` is the base router class
         router.__init__(self, layers, design, bbox)
 
         # New pins are the side supply pins
         self.new_pins = {}
+        
+		# Use for add distance of dout pins at the perimeter
+        self.distance_right = 0
+
+        self.distance_left = 0
+        
+		# Use for control which edge/position the pins(dout) will be placed
+        # 0 -> default
+        # 1 -> all top/bottom
+        # 2 -> all left/right
+        self.state_mod = mod
 
 
     def route(self, pin_names):
@@ -76,8 +87,6 @@ class signal_escape_router(router):
             self.find_vias(new_vias)
             routed_count += 1
             debug.info(2, "Routed {} of {} signal pins".format(routed_count, routed_max))
-            print("route pins:")
-            print(source)
         self.replace_layout_pins()
 
 
@@ -177,18 +186,13 @@ class signal_escape_router(router):
                               rect=rect,
                               layer_name_pp=layer)
             self.fake_pins.append(pin)
-            print("this is add_per")
-            print(pin.name)
-            print(pin.center)
 
     def create_fake_pin(self, pin):
         """ Create a fake pin on the perimeter orthogonal to the given pin. """
 
         ll, ur = self.bbox
         c = pin.center()
-        print("inside pin name")
-        print("----------------------------------------------------------")
-        print(pin.name)
+
         # Find the closest edge
         edge, vertical = self.get_closest_edge(c)
 
@@ -202,30 +206,49 @@ class signal_escape_router(router):
             fake_center = vector(ur.x + self.track_wire * 2, c.y)
         if edge == "top":
             fake_center = vector(c.x, ur.y + self.track_wire * 2)
-            #fake_center = vector(ll.x - self.track_wire * 2, c.y) # test if here we could change the pin position at the layout               
-        """
-        pattern = r'^addr0_1'
+            
+        # relocate the pin position
+        pattern = r'^dout'
         if re.match(pattern, pin.name):
-            vertical = True
-            fake_center = vector(ll.x - self.track_wire * 2, c.y + self.track_wire * 4)# fix still do not know how to control the distance between every fake pin
-            #do not know why after this, all fake out pins are put at the same position -> because the originl inside pin has same y?
-        """
+            
+            if self.state_mod == 0:
+                pass# do not change, default
+            
+            elif self.state_mod == 1: # all top/bottom
+                if edge == "right": 
+                    vertical = False
+                    fake_center = vector(c.x, ll.y - self.track_wire * 2)
+                    self.distance_right += 1
+                else:
+                    if edge == "left":
+                        vertical = False
+                        fake_center = vector(c.x, ll.y + self.track_wire * 2)
+                        self.distance_left += 1   
+            
+            elif self.state_mod == 2: # all left/right
+                if (edge == "bottom") or (edge == "right"):# change to the east
+                    vertical = True
+                    fake_center = vector(ur.x + self.track_wire * 2, ll.y + 30 + self.distance_right)
+                    self.distance_right += 1
+                else:
+                    if (edge == "top") or (edge == "left"):# change to the west
+                        vertical = True
+                        fake_center = vector(ll.x - self.track_wire * 2, ur.y - 30 - self.distance_left)
+                        self.distance_left += 1 
+            else:
+                debug.error("wrong state mod!", -1)              
+            
         # Create the fake pin shape
         layer = self.get_layer(int(not vertical))
         half_wire_vector = vector([self.half_wire] * 2)
         nll = fake_center - half_wire_vector
         nur = fake_center + half_wire_vector
-        #not test jet
-        #half_wire_vector = vector([self.half_wire] * 2)# out *2 means vector([self.half_wire, self.half_wire])
-        #nll = fake_center - half_wire_vector - half_wire_vector
-        #nur = fake_center + half_wire_vector + half_wire_vector
+
         rect = [nll, nur]
         pin = graph_shape(name="fake",
                           rect=rect,
                           layer_name_pp=layer)
-        print("this create_fake_pin")
-        print(pin.name)
-        print(pin.center)
+
         return pin
 
 
@@ -234,8 +257,6 @@ class signal_escape_router(router):
 
         to_route = []
         for name in pin_names:
-            print("==============the pin names===================")
-            print(name)
             pin = next(iter(self.pins[name]))
             fake = self.create_fake_pin(pin)
             to_route.append((pin, fake, pin.distance(fake)))

@@ -69,12 +69,13 @@ for path in output_files:
     debug.print_raw(path)
 
 # Create an SRAM (we can also pass sram_config, see documentation/tutorials for details)
-#from openram import sram
-#s = sram()
-from openram import sram_new_test
-s = sram_new_test.sram()
+from openram import sram
+s = sram()
+#from openram import sram_openroad_test
+#s = sram_openroad_test.sram()
 # Output the files for the resulting SRAM
 s.save()
+#s.save_only()
 '''
 del s
 s = sram_road.sram(mod=1)

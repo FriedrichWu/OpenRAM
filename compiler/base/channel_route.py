@@ -5,6 +5,8 @@
 # (acting for and on behalf of Oklahoma State University)
 # All rights reserved.
 #
+# This version aims to keep the track out/vertical to the dff pins
+# Now only consider the channel at the south, but works fine with channel at the north
 import collections
 from openram import debug
 from openram.tech import drc
@@ -85,7 +87,8 @@ class channel_route(design):
                  layer_stack,
                  directions=None,
                  vertical=False,
-                 parent=None):
+                 parent=None,
+                 dff_area=False):
         """
         The net list is a list of the nets with each net being a list of pins
         to be connected. The offset is the lower-left of where the
@@ -106,6 +109,7 @@ class channel_route(design):
         self.vertical = vertical
         # For debugging...
         self.parent = parent
+        self.dff_area = dff_area # this is a special value to handle dff areas, should be true when routing col_dff/dffs
 
         if not directions or directions == "pref":
             # Use the preferred layer directions
@@ -139,7 +143,17 @@ class channel_route(design):
 
         layer_stuff = self.get_layer_pitch(self.horizontal_layer)
         (self.horizontal_nonpref_pitch, self.horizontal_pitch, self.horizontal_width, self.horizontal_space) = layer_stuff
-
+        # For debug
+        
+        debug.warning("layer horizontal: {0}".format(self.horizontal_layer))
+        debug.warning("horizontal_nonpref_pitch: {0}".format(self.horizontal_nonpref_pitch))
+        debug.warning("horizontal_pitch: {0}".format(self.horizontal_pitch))
+        debug.warning("horizontal_space: {0}".format(self.horizontal_space)) 
+        debug.warning("layer vertical: {0}".format(self.vertical_layer))
+        debug.warning("vertiacl_nonpref_pitch: {0}".format(self.vertical_pitch))
+        debug.warning("vertical_pitch: {0}".format(self.vertical_pitch))
+        debug.warning("vertical_space: {0}".format(self.vertical_space))
+        
         self.route()
 
     def remove_net_from_graph(self, pin, g):
@@ -219,8 +233,19 @@ class channel_route(design):
             real_channel_offset = vector(self.offset.x, min(self.min_value, self.offset.y))
         else:
             real_channel_offset = vector(min(self.min_value, self.offset.x), self.offset.y)
-        current_offset = real_channel_offset
+            
+        if self.dff_area == False:
+            current_offset = real_channel_offset
+        else: # special handle for dff area
+            current_offset = vector(real_channel_offset.x, real_channel_offset.y + 5) # make route out of dffs area
 
+            if self.layer_stack == self.m2_stack:
+                self.vertical_nonpref_pitch = self.horizontal_pitch
+        
+            if self.layer_stack == self.m1_stack:
+                current_offset = vector(real_channel_offset.x, current_offset.y + 14) # make sure no overlap between col_dffs & data_dffs
+                if real_channel_offset.y > 0: # which means this is channnel router for coldff at the top
+                    current_offset = real_channel_offset # no offset to avoid overlap problem at the top
         # Sort nets by left edge value
         nets.sort()
         while len(nets) > 0:
