@@ -162,7 +162,7 @@ class sram():
         spname = OPTS.output_path + self.s.name + ".sp"
         debug.print_raw("SP: Writing to {0}".format(spname))
         self.sp_write(spname)
-        #''' #comment the following state when generating big sram, and then disable drc/lvs, because maigc_ext stuck 
+        ''' #comment the following state when generating big sram, and then disable drc/lvs, because maigc_ext stuck 
         # Save a functional simulation file with default period
         functional(self.s,
                    spname,
@@ -184,7 +184,7 @@ class sram():
         d.targ_write_ports = [self.s.write_ports[0]]
         d.write_delay_stimulus()
         print_time("DELAY", datetime.datetime.now(), start_time)
-        #''' #comment the above when generating big sram, and then disable drc/;vs, bevause magic_ext stuck
+        ''' #comment the above when generating big sram, and then disable drc/lvs, bevause magic_ext stuck
         # Save trimmed spice file
         temp_trim_sp = "{0}trimmed.sp".format(OPTS.output_path)
         self.sp_write(temp_trim_sp, lvs=False, trim=True)

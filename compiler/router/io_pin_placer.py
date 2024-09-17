@@ -109,7 +109,7 @@ class io_pin_placer(router):
                 fake_center = vector(c.x + add_distance, ur.y + self.track_wire * 2 - offset)
                 is_too_close = any(abs(pin_added.center().x - fake_center.x) < (0.8 + self.half_wire * 4)for pin_added in self.io_pins_added_up)  
                     
-        # Create the fake pin shape
+        # Create the fake pin shape, here make sure the pin in the gds will be big enough
         layer = self.get_layer(int(not vertical))
         half_wire_vector = vector([self.half_wire] * 2)
         nll = fake_center - half_wire_vector - half_wire_vector 

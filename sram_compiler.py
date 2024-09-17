@@ -77,6 +77,9 @@ s = sram()
 s.save()
 #s.save_only()
 '''
+from openram import sram_road
+s = sram_road.sram(mod=0)
+s.save(mod=0)
 del s
 s = sram_road.sram(mod=1)
 s.save(mod=1)

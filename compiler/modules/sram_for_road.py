@@ -5,8 +5,10 @@
 # (acting for and on behalf of Oklahoma State University)
 # All rights reserved.
 #
-# This file aiming to create the sram module without routing
-# provide methods of seperated lef file generation
+
+# This file aims to use openroad to do the routing
+# No more rings for each moudle
+# Provide methods for generating module verilog files & top verilog file
 import datetime
 from math import ceil
 from importlib import import_module, reload
@@ -21,7 +23,7 @@ from openram.tech import spice
 from openram import OPTS, print_time
 
 
-class sram_1bank(design, verilog, lef):
+class sram_for_road(design, verilog, lef):
     """
     Procedures specific to a one bank SRAM.
     """
@@ -53,6 +55,221 @@ class sram_1bank(design, verilog, lef):
         # delay control logic does not have RBLs
         self.has_rbl = OPTS.control_logic != "control_logic_delay"
 
+    def add_pin_bank(self):
+        # lef file use this pin name, should be same with new pin 
+        """ Adding pins for Bank module"""
+        for port in self.read_ports:
+            for bit in range(self.word_size + self.num_spare_cols):
+                self.add_pin("dout{0}[{1}]".format(port, bit), "OUTPUT")
+        for port in self.all_ports:
+            if self.has_rbl:
+                self.add_pin("rbl_bl{0}".format(port), "OUTPUT")
+        for port in self.write_ports:
+            for bit in range(self.word_size + self.num_spare_cols):
+                self.add_pin("bank_din{0}[{1}]".format(port, bit), "INPUT")
+        for port in self.all_ports:
+            for bit in range(self.bank_addr_size):
+                self.add_pin("addr{0}[{1}]".format(port, bit), "INPUT")
+
+        # For more than one bank, we have a bank select and name
+        # the signals gated_*.
+        for port in self.read_ports:
+            self.add_pin("s_en{0}".format(port), "INPUT")
+        for port in self.all_ports:
+            self.add_pin("p_en_bar{0}".format(port), "INPUT")
+        for port in self.write_ports:
+            self.add_pin("w_en{0}".format(port), "INPUT")
+            for bit in range(self.num_wmasks):
+                self.add_pin("bank_wmask{0}[{1}]".format(port, bit), "INPUT")
+            for bit in range(self.num_spare_cols):
+                if self.num_spare_cols == 1:
+                    self.add_pin("bank_spare_wen{0}".format(port), "INPUT")
+                else: 
+                    self.add_pin("bank_spare_wen{0}[{1}]".format(port, bit), "INPUT")
+        for port in self.all_ports:
+            self.add_pin("wl_en{0}".format(port), "INPUT")
+
+        # Standard supply and ground names
+        try:
+            self.vdd_name = spice["power"]
+        except KeyError:
+            self.vdd_name = "vdd"
+        try:
+            self.gnd_name = spice["ground"]
+        except KeyError:
+            self.gnd_name = "gnd"
+
+        self.add_pin(self.vdd_name, "POWER")
+        self.add_pin(self.gnd_name, "GROUND")
+        self.ext_supplies = [self.vdd_name, self.gnd_name]
+        self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+    
+    def add_pin_row_addr_dff(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            for bit in range(self.row_addr_size):
+                #input
+                self.add_pin("addr{}[{}]".format(port, bit + self.col_addr_size), "INPUT")
+                print("addr{}[{}]".format(port, bit), "INPUT")
+                #output
+                self.add_pin("a{}[{}]".format(port, bit + self.col_addr_size), "OUTPUT")
+            #clk_buf, regard as input
+            self.add_pin("clk_buf{}".format(port), "INPUT")
+            # Standard supply and ground names
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+    
+    def add_pin_col_addr_dff(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            for bit in range(self.col_addr_size):
+                #input
+                self.add_pin("addr{}[{}]".format(port, bit), "INPUT")
+                #output
+                self.add_pin("a{}[{}]".format(port, bit), "OUTPUT")
+            #clk_buf, regard as input
+            self.add_pin("clk_buf{}".format(port), "INPUT")
+            # Standard supply and ground names
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+    
+    def add_pin_data_dff(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            for bit in range(self.word_size + self.num_spare_cols):
+                # input
+                self.add_pin("din{}[{}]".format(port, bit), "INPUT")
+                # output
+                self.add_pin("bank_din{}[{}]".format(port, bit), "OUTPUT")
+            #clk_buf, regard as input
+            self.add_pin("clk_buf{}".format(port), "INPUT")
+            # Standard supply and ground names
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+ 
+    def add_pin_wmask_dff(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            for bit in range(self.num_wmasks):
+                # input
+                self.add_pin("wmask{}[{}]".format(port, bit), "INPUT")
+                # output
+                self.add_pin("bank_wmask{}[{}]".format(port, bit), "OUTPUT")
+            #clk_buf, regard as input
+            self.add_pin("clk_buf{}".format(port), "INPUT")
+            # Standard supply and ground names
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+ 
+    def add_pin_spare_wen_dff(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            for bit in range(self.num_spare_cols):
+                if self.num_spare_cols == 1:
+                    # input
+                    self.add_pin("spare_wen{}".format(port), "INPUT")
+                    # output
+                    self.add_pin("bank_spare_wen{}".format(port), "OUTPUT")
+                else:               
+				    # input
+                    self.add_pin("spare_wen{}[{}]".format(port, bit), "INPUT")
+                    # output
+                    self.add_pin("bank_spare_wen{}[{}]".format(port, bit), "OUTPUT")
+            #clk_buf, regard as input
+            self.add_pin("clk_buf{}".format(port), "INPUT")
+            # Standard supply and ground names
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+            
+    def add_pin_control(self):
+        # lef file use this pin name, should be same with new pin 
+        for port in self.all_ports:
+            # Inputs
+            self.add_pin("csb{}".format(port), "INPUT")
+            if port in self.readwrite_ports:
+                self.add_pin("web{}".format(port), "INPUT")
+            self.add_pin("clk{}".format(port), "INPUT")
+            if self.has_rbl:
+                self.add_pin("rbl_bl{}".format(port), "INPUT")
+            # Outputs
+            if port in self.read_ports:
+                self.add_pin("s_en{}".format(port), "OUTPUT")
+            if port in self.write_ports:
+                self.add_pin("w_en{}".format(port), "OUTPUT")
+            self.add_pin("p_en_bar{}".format(port), "OUTPUT")
+            self.add_pin("wl_en{}".format(port), "OUTPUT")
+            self.add_pin("clk_buf{}".format(port), "OUTPUT")
+             
+            # Standard supply and ground names
+            # not sure if this part should stay inside the for loop
+            try:
+                self.vdd_name = spice["power"]
+            except KeyError:
+                self.vdd_name = "vdd"
+            try:
+                self.gnd_name = spice["ground"]
+            except KeyError:
+                self.gnd_name = "gnd"
+            self.add_pin(self.vdd_name, "POWER")
+            self.add_pin(self.gnd_name, "GROUND")
+            self.ext_supplies = [self.vdd_name, self.gnd_name]
+            self.ext_supply = {"vdd" : self.vdd_name, "gnd" : self.gnd_name}
+        
     def add_pins(self):
         """ Add pins for entire SRAM. """
 
@@ -208,113 +425,134 @@ class sram_1bank(design, verilog, lef):
         if not OPTS.is_unit_test:
             print_time("Submodules", datetime.datetime.now(), start_time)
             
-    def place_io_pins(self, bbox):
-        """Place IO pins"""
-        # List of pin to new pin name
-        pins_to_route = []
-        for port in self.all_ports:
-            # Connect the control pins as inputs
-            for signal in self.control_logic_inputs[port]:
-                if signal.startswith("rbl"):
-                    continue
-                if signal=="clk":
-                    pins_to_route.append("{0}{1}".format(signal, port))
-                else:
-                    pins_to_route.append("{0}{1}".format(signal, port))
+    def create_netlist_bank(self):
+        """ Netlist creation """
 
-            if port in self.write_ports:
-                for bit in range(self.word_size + self.num_spare_cols):
-                    pins_to_route.append("din{0}[{1}]".format(port, bit))
-
-            if port in self.readwrite_ports or port in self.read_ports:
-                for bit in range(self.word_size + self.num_spare_cols):
-                    pins_to_route.append("dout{0}[{1}]".format(port, bit))
-
-            for bit in range(self.col_addr_size):
-                pins_to_route.append("addr{0}[{1}]".format(port, bit))
-
-            for bit in range(self.row_addr_size):
-                pins_to_route.append("addr{0}[{1}]".format(port, bit + self.col_addr_size))
-
-            if port in self.write_ports:
-                if self.write_size != self.word_size:
-                    for bit in range(self.num_wmasks):
-                        pins_to_route.append("wmask{0}[{1}]".format(port, bit))
-
-            if port in self.write_ports:
-                if self.num_spare_cols == 1:
-                    pins_to_route.append("spare_wen{0}".format(port))
-                else:
-                    for bit in range(self.num_spare_cols):
-                        pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
-                        
-        from openram.router.io_pin_placer import io_pin_placer as placer
-        pl = placer(layers=self.m3_stack,
-                    bbox=bbox,
-                    design=self)    
-        pl.add_io_pins(pins_to_route)
-        #pl.design.remove_layout_pin("wmask0[0]") # this could use for deleting pins
-
-    def get_closest_edge(self, point, bbox):
-        """ Return a point's the closest edge and the edge's axis direction. """
-
-        ll, ur = bbox
-
-        # Snap the pin to the perimeter and break the iteration
-        ll_diff_x = abs(point.x - ll.x)
-        ll_diff_y = abs(point.y - ll.y)
-        ur_diff_x = abs(point.x - ur.x)
-        ur_diff_y = abs(point.y - ur.y)
-        min_diff = min(ll_diff_x, ll_diff_y, ur_diff_x, ur_diff_y)
-
-        if min_diff == ll_diff_x:
-            return "left", True
-        if min_diff == ll_diff_y:
-            return "bottom", False
-        if min_diff == ur_diff_x:
-            return "right", True
-        return "top", False
-    
-    def create_layout_openroad(self):
-        # only placement of submoduels & io pins
-        # not routed inner-signal/escape-signal/pdn
         start_time = datetime.datetime.now()
-        self.place_instances()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        self.add_pin_bank()
+        self.bank_inst = self.create_bank(0)
+
+        # This is for the lib file if we don't create layout
+        self.width=0
+        self.height=0
+
         if not OPTS.is_unit_test:
-            print_time("Placement", datetime.datetime.now(), start_time)
-        
-		# Some technologies have an isolation
-        self.add_dnwell(inflate=2.5)
-		# add IO pins
-        init_bbox = self.get_bbox()
-        
-        self.add_layout_pins()
-        self.place_io_pins(bbox=init_bbox)
-        
-        # add power rings
-        # use current supply router
-        if OPTS.route_supplies:
-            self.route_supplies(init_bbox) 
+            print_time("Submodules Bank", datetime.datetime.now(), start_time)
+
+    def create_netlist_control(self):
+        """ Netlist creation """
+
+        start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        self.add_pin_control()
+        self.control_logic_insts = self.create_control_logic() # be aware, multi-insts possible
+
+        # This is for the lib file if we don't create layout
+        self.width=0
+        self.height=0
+
+        if not OPTS.is_unit_test:
+            print_time("Submodules Control", datetime.datetime.now(), start_time)    
             
-        self.add_lvs_correspondence_points()
-
-        self.offset_all_coordinates()
-
-        highest_coord = self.find_highest_coords()
-        self.width = highest_coord[0]
-        self.height = highest_coord[1]
-        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
-            debug.info(2, "adding global pex labels")
-            self.add_global_pex_labels()
-        self.add_boundary(ll=vector(0, 0),
-                          ur=vector(self.width, self.height))
+    def create_netlist_row_addr_dff(self):
+        """ Netlist creation """
 
         start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        self.add_pin_row_addr_dff()
+        self.row_addr_dff_insts = self.create_row_addr_dff() # be aware, multi-insts possible
+
+        # This is for the lib file if we don't create layout
+        self.width=0
+        self.height=0
+
         if not OPTS.is_unit_test:
-            # We only enable final verification if we have routed the design
-            # Only run this if not a unit test, because unit test will also verify it.
-            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
-            print_time("Verification", datetime.datetime.now(), start_time)        
+            print_time("Submodules row_addr_dff", datetime.datetime.now(), start_time) 
+    
+    def create_netlist_col_addr_dff(self):
+        """ Netlist creation """
+
+        start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        if self.col_addr_dff:
+            self.add_pin_col_addr_dff()
+            self.col_addr_dff_insts = self.create_col_addr_dff() # be aware, multi-insts possible, or none
+
+            # This is for the lib file if we don't create layout
+            self.width=0
+            self.height=0
+
+            if not OPTS.is_unit_test:
+                print_time("Submodules col_addr_dff", datetime.datetime.now(), start_time) 
+        else:
+            return False # no col_addr_dff will be generated
+
+    def create_netlist_data_dff(self):
+        """ Netlist creation """
+
+        start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        self.add_pin_data_dff()
+        self.data_dff_insts = self.create_data_dff() # be aware, multi-insts possible
+
+        # This is for the lib file if we don't create layout
+        self.width=0
+        self.height=0
+
+        if not OPTS.is_unit_test:
+            print_time("Submodules data dff", datetime.datetime.now(), start_time) 
+
+    def create_netlist_wmask_dff(self):
+        """ Netlist creation """
+
+        start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        if self.write_size != self.word_size:
+            self.add_pin_wmask_dff()
+            self.wmask_dff_insts = self.create_wmask_dff() # be aware, multi-insts possible, or none
+
+            # This is for the lib file if we don't create layout
+            self.width=0
+            self.height=0
+
+            if not OPTS.is_unit_test:
+                print_time("Submodules wmask dff", datetime.datetime.now(), start_time) 
+        else:
+            return False # no wmask_dff will be generated
+        
+    def create_netlist_spare_wen_dff(self):
+        """ Netlist creation """
+
+        start_time = datetime.datetime.now()
+
+        # Must create the control logic before pins to get the pins
+        self.add_modules()
+        if self.num_spare_cols:
+            self.add_pin_spare_wen_dff()
+            self.spare_wen_dff_insts = self.create_spare_wen_dff() # be aware, multi-insts possible, or none
+            
+            # This is for the lib file if we don't create layout
+            self.width=0
+            self.height=0
+
+            if not OPTS.is_unit_test:
+                print_time("Submodules spare wen dff", datetime.datetime.now(), start_time) 
+        else:
+            self.num_spare_cols = 0
+            return False # no spare_col will be generated
 
     def create_layout(self):
         """ Layout creation """
@@ -348,7 +586,652 @@ class sram_1bank(design, verilog, lef):
             # Only run this if not a unit test, because unit test will also verify it.
             self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
             print_time("Verification", datetime.datetime.now(), start_time)
+        
+    def create_layout_bank_only(self):
+        start_time = datetime.datetime.now()
+        #Placement
+        self.place_bank(self.bank_inst, [0, 0], 1, 1)
+        if not OPTS.is_unit_test:
+            print_time("Bank Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_bank_only()
 
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time)
+        
+    def create_layout_control_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.control_logic_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("Control Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_control_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time)
+
+    def create_layout_row_addr_dff_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.row_addr_dff_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("row_addr_dff Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_row_addr_dff_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time)       
+    
+    def create_layout_col_addr_dff_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.col_addr_dff_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("col_addr_dff Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_col_addr_dff_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time) 
+    
+    def create_layout_data_dff_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.data_dff_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("data_dff Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_data_dff_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time) 
+
+    def create_layout_wmask_dff_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.wmask_dff_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("wmask_dff Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_wmask_dff_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time) 
+    
+    def create_layout_spare_wen_dff_only(self, instance_index=0):
+        start_time = datetime.datetime.now()
+        # Placement
+        # We will generate different layout for different port(if there are multi-port)
+        port = instance_index
+        self.spare_wen_dff_insts[port].place(vector(0,0))
+        
+        if not OPTS.is_unit_test:
+            print_time("spare_wen_dff Placement", datetime.datetime.now(), start_time)
+        start_time = datetime.datetime.now()
+        self.route_spare_wen_dff_only(instance_index=instance_index)
+
+        if not OPTS.is_unit_test:
+            print_time("Routing", datetime.datetime.now(), start_time)
+
+        self.add_lvs_correspondence_points()
+
+        self.offset_all_coordinates()
+
+        highest_coord = self.find_highest_coords()
+        self.width = highest_coord[0]
+        self.height = highest_coord[1]
+        if OPTS.use_pex and OPTS.pex_exe[0] != "calibre":
+            debug.info(2, "adding global pex labels")
+            self.add_global_pex_labels()
+        self.add_boundary(ll=vector(0, 0),
+                          ur=vector(self.width, self.height))
+
+        start_time = datetime.datetime.now()
+        if not OPTS.is_unit_test:
+            # We only enable final verification if we have routed the design
+            # Only run this if not a unit test, because unit test will also verify it.
+            self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
+            print_time("Verification", datetime.datetime.now(), start_time)   
+
+    def route_bank_only(self):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_bank_only_pins()
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+        
+    def route_control_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_control_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+        
+    def route_row_addr_dff_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_row_addr_dff_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+    
+    def route_col_addr_dff_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_col_addr_dff_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+    
+    def route_data_dff_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_data_dff_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+    
+    def route_wmask_dff_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_wmask_dff_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+            
+    def route_spare_wen_dff_only(self, instance_index=0):
+        # We add the vias to M3 before routing supplies because
+        # they might create some blockages
+        self.add_layout_spare_wen_dff_only_pins(instance_index=instance_index)
+        print("====================================================")
+        for pin in self.pins:
+            print(pin)
+
+        # Some technologies have an isolation
+        self.add_dnwell(inflate=2.5)
+    
+    def add_layout_spare_wen_dff_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]        
+
+        for bit in range(self.num_spare_cols):
+            if self.num_spare_cols == 1:
+                # input
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "din_{}".format(bit), # old name
+                                "spare_wen{}".format(port), # new name
+                                start_layer=pin_layer)
+                # output
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "dout_{}".format(bit), 
+                                "bank_spare_wen{}".format(port),
+                                start_layer=pin_layer)
+            else:
+                # input
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "din_{}".format(bit), # old name
+                                "spare_wen{}[{}]".format(port, bit), # new name
+                                start_layer=pin_layer)
+                # output
+                self.add_io_pin(self.spare_wen_dff_insts[port],
+                                "dout_{}".format(bit), 
+                                "bank_spare_wen{}[{}]".format(port, bit),
+                                start_layer=pin_layer)
+        #clk_buf, regard as input
+        self.add_io_pin(self.spare_wen_dff_insts[port],
+                        "clk", 
+                        "clk_buf{}".format(port),
+                        start_layer=pin_layer)
+    
+    def add_layout_wmask_dff_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+
+        for bit in range(self.num_wmasks):
+            # input
+            self.add_io_pin(self.wmask_dff_insts[port],
+                            "din_{}".format(bit), 
+                            "wmask{}[{}]".format(port, bit),
+                            start_layer=pin_layer)
+            # output
+            self.add_io_pin(self.wmask_dff_insts[port],
+                            "dout_{}".format(bit),
+                            "bank_wmask{}[{}]".format(port, bit),
+                            start_layer=pin_layer)
+        #clk_buf, regard as input
+        self.add_io_pin(self.wmask_dff_insts[port],
+                        "clk", 
+                        "clk_buf{}".format(port),
+                        start_layer=pin_layer)                          
+
+    def add_layout_data_dff_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+
+        for bit in range(self.word_size + self.num_spare_cols):
+            # input
+            self.add_io_pin(self.data_dff_insts[port],
+                            "din_{}".format(bit), 
+                            "din{}[{}]".format(port, bit),
+                            start_layer=pin_layer)
+            # output
+            self.add_io_pin(self.data_dff_insts[port],
+                            "dout_{}".format(bit), 
+                            "bank_din{}[{}]".format(port, bit),
+                            start_layer=pin_layer)
+        #clk_buf, regard as input
+        self.add_io_pin(self.data_dff_insts[port],
+                        "clk",
+                        "clk_buf{}".format(port),
+                        start_layer=pin_layer)    
+
+    def add_layout_col_addr_dff_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+
+        for bit in range(self.col_addr_size):
+            #input
+            self.add_io_pin(self.col_addr_dff_insts[port],
+                            "din_{}".format(bit), # old name 
+                            "addr{}[{}]".format(port, bit), # new name
+                            start_layer=pin_layer)
+            #output
+            self.add_io_pin(self.col_addr_dff_insts[port],
+                            "dout_{}".format(bit), 
+                            "a{}[{}]".format(port, bit),
+                            start_layer=pin_layer)
+        #clk_buf, regard as input
+        self.add_pin(self.col_addr_dff_insts[port],
+                     "clk", 
+                     "clk_buf{}".format(port),
+                     start_layer=pin_layer)
+            
+    def add_layout_row_addr_dff_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+ 
+        for bit in range(self.row_addr_size):
+            #input
+            #debug
+            print("this is port number:{0}".format(port))
+            print("insts:{0}".format(self.row_addr_dff_insts[port]))
+            self.add_io_pin(self.row_addr_dff_insts[port],
+                            "din_{}".format(bit + self.col_addr_size), # old name 
+                            "addr{}[{}]".format(port, bit + self.col_addr_size), # new name
+                           start_layer=pin_layer)
+            #output
+            self.add_io_pin(self.row_addr_dff_insts[port],
+                            "dout_{}".format(bit + self.col_addr_size), 
+                            "a{}[{}]".format(port, bit + self.col_addr_size),
+                            start_layer=pin_layer)
+        #clk_buf, regard as input
+        self.add_io_pin(self.row_addr_dff_insts[port],
+                        "clk", 
+                        "clk_buf{}".format(port),
+                        start_layer=pin_layer) 
+    
+    def add_layout_control_only_pins(self, add_vias=True, instance_index=0):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        port = instance_index
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+        
+        # Inputs
+        self.add_io_pin(self.control_logic_insts[port],
+                        "csb", #old name
+                        "csb{}".format(port), #new name
+                        start_layer=pin_layer)
+        if port in self.readwrite_ports:
+            self.add_io_pin(self.control_logic_insts[port],
+                            "web", 
+                            "web{}".format(port),
+                            start_layer=pin_layer)
+        self.add_io_pin(self.control_logic_insts[port],
+                        "clk", 
+                        "clk{}".format(port),
+                        start_layer=pin_layer)
+        if self.has_rbl:
+            self.add_io_pin(self.control_logic_insts[port],
+                            "rbl_bl",
+                            "rbl_bl{}".format(port),
+                            start_layer=pin_layer)
+        # Outputs
+        if port in self.read_ports:
+            self.add_io_pin(self.control_logic_insts[port],
+                            "s_en", 
+                            "s_en{}".format(port),
+                            start_layer=pin_layer)
+        if port in self.write_ports:
+            self.add_io_pin(self.control_logic_insts[port],
+                            "w_en", 
+                            "w_en{}".format(port),
+                            start_layer=pin_layer)
+        self.add_io_pin(self.control_logic_insts[port],
+                        "p_en_bar", 
+                        "p_en_bar{}".format(port),
+                        start_layer=pin_layer)
+        self.add_io_pin(self.control_logic_insts[port],
+                        "wl_en", 
+                        "wl_en{}".format(port),
+                        start_layer=pin_layer)
+        self.add_io_pin(self.control_logic_insts[port],
+                     "clk_buf",
+                     "clk_buf{}".format(port),
+                     start_layer=pin_layer)            
+    
+    def add_layout_bank_only_pins(self, add_vias=True):
+        """
+        Add the top-level pins for a single bank SRAM with control.
+        """
+        # Hack: If we are escape routing, set the pin layer to
+        # None so that we will start from the pin layer
+        # Otherwise, set it as the pin layer so that no vias are added.
+        # Otherwise, when we remove pins to move the dff array dynamically,
+        # we will leave some remaining vias when the pin locations change.
+        if add_vias:
+            pin_layer = None
+        else:
+            pin_layer = self.pwr_grid_layers[0]
+
+        for port in self.readwrite_ports or port in self.read_ports:
+            for bit in range(self.word_size + self.num_spare_cols):
+                self.add_io_pin(self.bank_inst,
+                                "dout{0}_{1}".format(port, bit),#old name
+                                "dout{0}[{1}]".format(port, bit),#new name
+                                start_layer=pin_layer)
+        """ Adding pins for Bank module"""
+        for port in self.all_ports:
+            if self.has_rbl:
+                self.add_io_pin(self.bank_inst,
+                                "rbl_bl_{0}_{0}".format(port), 
+                                "rbl_bl{0}".format(port),
+                                start_layer=pin_layer)
+        for port in self.write_ports:
+            for bit in range(self.word_size + self.num_spare_cols):
+                self.add_io_pin(self.bank_inst,
+                                "din{0}_{1}".format(port, bit), 
+                                "bank_din{0}[{1}]".format(port, bit),
+                                start_layer=pin_layer) 
+        # manuel change position, so not at same y        
+        for port in self.all_ports:
+            for bit in range(self.bank_addr_size):
+                self.change_layout_pin_position(self.bank_inst,
+                                                "addr{0}_{1}".format(port, bit), 
+                                                "addr{0}[{1}]".format(port, bit),
+                                                start_layer=pin_layer,
+                                                distance=bit)
+        for port in self.read_ports:
+            self.change_layout_pin_position(self.bank_inst,
+                                            "s_en{0}".format(port),
+                                            "s_en{0}".format(port),
+                                            start_layer=pin_layer,
+                                            distance=4)
+        for port in self.all_ports:
+            self.change_layout_pin_position(self.bank_inst,
+                                            "p_en_bar{0}".format(port),
+                                            "p_en_bar{0}".format(port),
+                                            start_layer=pin_layer,
+                                            distance=2)
+        for port in self.write_ports:
+            self.change_layout_pin_position(self.bank_inst,
+                                            "w_en{0}".format(port),
+                                            "w_en{0}".format(port),
+                                            start_layer=pin_layer)
+            
+            for bit in range(self.num_wmasks):
+                self.add_io_pin(self.bank_inst,
+                                "bank_wmask{0}_{1}".format(port, bit),
+                                "bank_wmask{0}[{1}]".format(port, bit),
+                                start_layer=pin_layer)
+            for bit in range(self.num_spare_cols):
+                if self.num_spare_cols == 1:
+                    self.add_io_pin(self.bank_inst,
+                                    "bank_spare_wen{0}_{1}".format(port, bit),
+                                    "bank_spare_wen{0}".format(port),
+                                    start_layer=pin_layer)
+                else:
+                    self.add_io_pin(self.bank_inst,
+                                    "bank_spare_wen{0}_{1}".format(port, bit),
+                                    "bank_spare_wen{0}[{1}]".format(port, bit),
+                                    start_layer=pin_layer)
+        if port in self.all_ports:
+            self.add_io_pin(self.bank_inst,
+                            "wl_en{0}".format(port),
+                            "wl_en{0}".format(port),
+                            start_layer=pin_layer)
+                
+    def change_layout_pin_position(self, instance, pin_name, new_name, start_layer=None, directions=None, distance=1):
+        """
+        Add a signle input or output pin up to metal 3.
+        This additonal operation make sure pins are not at the same y
+        """
+        pin = instance.get_pin(pin_name)
+        
+        if not start_layer:
+            start_layer = pin.layer
+        # Just use the power pin function for now to save code
+        self.add_power_pin(new_name, vector(pin.center()[0], pin.center()[1] + self.m3_pitch * distance * 2), start_layer=start_layer, directions=directions)
+                
     def create_modules(self):
         debug.error("Must override pure virtual function.", -1)
 
@@ -869,7 +1752,7 @@ class sram_1bank(design, verilog, lef):
         logic.
         """
 
-        self.bank_inst=self.create_bank(0)
+        self.bank_inst = self.create_bank(0)
 
         self.control_logic_insts = self.create_control_logic()
 
@@ -1182,12 +2065,22 @@ class sram_1bank(design, verilog, lef):
         init_bbox = self.get_bbox()
         # Route the supplies together and/or to the ring/stripes.
         # Route the pins to the perimeter
+        # change the order
+        
         if OPTS.perimeter_pins:
             # We now route the escape routes far enough out so that they will
             # reach past the power ring or stripes on the sides
             self.route_escape_pins(init_bbox)
+        #if OPTS.route_supplies:
+        #    self.route_supplies(init_bbox)
+        """
         if OPTS.route_supplies:
             self.route_supplies(init_bbox)
+        if OPTS.perimeter_pins:
+            # We now route the escape routes far enough out so that they will
+            # reach past the power ring or stripes on the sides
+            self.route_escape_pins(init_bbox)
+        """
 
 
     def route_dffs(self, add_routes=True):

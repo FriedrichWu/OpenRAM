@@ -66,7 +66,8 @@ class sram():
         self.name = name
 
         #from openram.modules.sram_1bank import sram_1bank as sram
-        from openram.modules.sram_part import sram_1bank as sram
+        from openram.modules.sram_for_road import sram_for_road as sram
+
         self.s = sram(name, sram_config)
 
     def get_sp_name(self):
