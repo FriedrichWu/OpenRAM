@@ -69,11 +69,12 @@ class io_pin_placer(router):
             c = pin.center()
             # Find the closest edge
             edge, vertical = self.get_closest_edge(c)
-            if re.match(pattern_clk, pin.name):# clk, should be placed at horizontal edge
-                if edge == "bottom" or edge == "left":
-                    edge = "bottom"
-                elif edge == "top" or edge == "right":
-                    edge = "top"
+            if re.match(pattern_clk, pin.name):# clk, should be placed at vertical edge
+                if edge == "bottom" or edge == "left":#clk0
+                    edge = "left"
+                elif edge == "top" or edge == "right":#clk1
+                    edge = "right"
+                vertical = True
                 self.store_position(pin, edge, vertical)
             if re.match(pattern_addr0, pin.name): # all the addr0[] should be placed at left edge
                 if edge == "top" or edge == "left":
@@ -174,13 +175,23 @@ class io_pin_placer(router):
     def store_position(self, pin, edge, vertical): # also need to store the source pin
         ll, ur = self.bbox
         c = pin.center()
+        pattern_clk = r'^clk'
+        pattern_csb = r'^csb'
         offset = 0.95 + 0.19 # FIX: this is the magic number to overcome the ovetflow problem at the boundary, may need a method
         if edge == "left":
             fake_center = vector(ll.x - self.track_wire * 2 + offset, c.y)
+            if re.match(pattern_clk, pin.name): # clk0 need to be higher at left edge, 0.32 is magic number
+                fake_center = vector(ll.x - self.track_wire * 2 + offset, c.y + 0.32)
+            if re.match(pattern_csb, pin.name): # csb0 need to be lower at left edge, 0.32 is magic number
+                fake_center = vector(ll.x - self.track_wire * 2 + offset, c.y - 0.32)
         if edge == "bottom":
             fake_center = vector(c.x, ll.y - self.track_wire * 2 + offset)
         if edge == "right":
             fake_center = vector(ur.x + self.track_wire * 2 - offset, c.y)
+            if re.match(pattern_clk, pin.name): # clk1 need to be lower at right edge, 0.32 is magic number
+                fake_center = vector(ur.x + self.track_wire * 2 - offset, c.y - 0.32)
+            if re.match(pattern_csb, pin.name): # csb0 need to be higher at right edge, 0.32 is magic number
+                fake_center = vector(ur.x + self.track_wire * 2 - offset, c.y + 0.32)
         if edge == "top":
             fake_center = vector(c.x, ur.y + self.track_wire * 2 - offset)
         # store the center position, rect, layer of fake pin, here make sure the pin in the gds will be big enough
@@ -441,17 +452,43 @@ class io_pin_placer(router):
                                          offset=point)
       
 
+    def add_big_plate(self, layer, offset, width, height):
+        # add rectagle at internal source pin, which avoid jog/non-preferred routing, but could implement shift-routing
+        # used in source_pin only
+        # offset->vertor(...), it is bottom-left position
+        self.design.add_rect(layer=layer,
+                             offset=offset,
+                             width=width,
+                             height=height)
+    
+
     def decide_point(self, source_pin, target_pin, is_up=False):
         ll, ur = self.bbox
         offset = 0.95 + 0.19 # FIX: this is the magic number to overcome the ovetflow problem at the boundary, may need a method
-        # internal -> left      
+        pattern_clk = r'^clk'
+        pattern_csb = r'^csb'
+		# internal -> left      
         if round(target_pin.center().x, 3) == round(ll.x - self.track_wire * 2 + offset, 3):
-            # direct connect possible
-            return [source_pin.rc(), target_pin.lc()] # FIX: not sure if shape overlap in met3 allowed, but seems OK
+            # special handle clk0
+            if re.match(pattern_clk, source_pin.name):
+                return [vector(source_pin.rc().x, source_pin.rc().y + 0.32), target_pin.lc()]# 0.32 should be same in initial_position
+            # special handel csb0         
+            elif re.match(pattern_csb, source_pin.name):
+                return [vector(source_pin.rc().x, source_pin.rc().y - 0.32), target_pin.lc()]# 0.32 should be same in initial_position
+            else:
+                # direct connect possible
+                return [source_pin.rc(), target_pin.lc()] # FIX: not sure if shape overlap in met3 allowed, but seems OK
         # internal -> right
         if round(target_pin.center().x, 3) == round(ur.x + self.track_wire * 2 - offset, 3):
-            # direct connect possible
-            return [source_pin.lc(), target_pin.rc()]
+            # special handel clk1
+            if re.match(pattern_clk, source_pin.name):
+                return [vector(source_pin.lc().x, source_pin.lc().y - 0.32), target_pin.rc()]# 0.32 should be same in initial_position   
+            # special handle csb0         
+            elif re.match(pattern_csb, source_pin.name):
+                return [vector(source_pin.lc().x, source_pin.lc().y + 0.32), target_pin.rc()]# 0.32 should be same in initial_position  
+            else:         
+                # direct connect possible
+                return [source_pin.lc(), target_pin.rc()]
         # internal -> top, need to add start_via m3->m4
         if round(target_pin.center().y, 3) == round(ur.y + self.track_wire * 2 - offset, 3):
             self.add_start_via(source_pin.center())
