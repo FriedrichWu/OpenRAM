@@ -240,7 +240,7 @@ class channel_route(design):
             current_offset = vector(real_channel_offset.x, real_channel_offset.y + 5) # make route out of dffs area
 
             if self.layer_stack == self.m2_stack:
-                self.vertical_nonpref_pitch = self.horizontal_pitch
+                self.vertical_nonpref_pitch = self.horizontal_pitch + 0.1 # 0.1 make sure even if via at same col, fulfill m3-m3 spacing
         
             if self.layer_stack == self.m1_stack:
                 current_offset = vector(real_channel_offset.x, current_offset.y + 14) # make sure no overlap between col_dffs & data_dffs
@@ -270,9 +270,14 @@ class channel_route(design):
                                                       self.horizontal_pitch)
                         current_offset = vector(current_offset.x, net.max_value + self.horizontal_nonpref_pitch)
                     else:
-                        self.add_horizontal_trunk_route(net.pins,
-                                                        current_offset,
-                                                        self.vertical_pitch)
+                        if self.dff_area == True: # only use in dff channel routing
+                            self.add_horizontal_trunk_with_jog(net.pins,
+                                                               current_offset,
+                                                               self.vertical_pitch)
+                        else:
+                            self.add_horizontal_trunk_route(net.pins,
+                                                            current_offset,
+                                                            self.vertical_pitch)
                         current_offset = vector(net.max_value + self.vertical_nonpref_pitch, current_offset.y)
 
                     # Remove the net from other constriants in the VCG
@@ -321,7 +326,132 @@ class channel_route(design):
         except AttributeError:
             debug.error("Cannot find layer pitch.", -1)
         return (nonpref_pitch, pitch, pitch - space, space)
+    
+    def add_horizontal_trunk_with_jog(self, 
+                                      pins,
+                                      trunk_offset,
+                                      pitch):
+        """ Special for connecting channel of dffs & bank, avoid too close with vdd pins """
+        max_x = max([pin.center().x for pin in pins])
+        min_x = min([pin.center().x for pin in pins])
+        min_y = min([pin.center().y for pin in pins])
+        # see the channel is at top or bottom
+        if min_y < 0: # port0, min_x need to change
+           min_x = min_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
+           port = 0
+        else: # port1, max_x need to change
+           max_x = max_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
+           port = 1
+        # if we are less than a pitch, just create a non-preferred layer jog
+        non_preferred_route = max_x - min_x <= pitch
+        half_layer_width = 0.5 * drc["minwidth_{0}".format(self.vertical_layer)]
+        if port == 0: # bottom need shift
+            if non_preferred_route: 
+                # Add the horizontal trunk on the vertical layer!
+                self.add_path(self.vertical_layer,
+                            [vector(min_x - half_layer_width, trunk_offset.y),
+                            vector(max_x + half_layer_width, trunk_offset.y)])
 
+                # Route each pin to the trunk
+                for pin in pins:
+                    if pin.cy() < trunk_offset.y:
+                        pin_pos = pin.center()
+                        mid = vector(pin_pos.x - 0.1, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [vector(pin.bc().x - 0.1, pin.bc().y), mid])
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin_pos)
+                    else:
+                        pin_pos = pin.bc()
+                        # No bend needed here
+                        mid = vector(pin_pos.x, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [pin_pos, mid])
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin.bc())                    
+            else:
+                # Add the horizontal trunk
+                self.add_path(self.horizontal_layer,
+                            [vector(min_x, trunk_offset.y),
+                            vector(max_x, trunk_offset.y)])
+
+                # Route each pin to the trunk
+                for pin in pins:
+                    # Find the correct side of the pin
+                    if pin.cy() < trunk_offset.y:
+                        pin_pos = pin.center()
+                        mid = vector(pin_pos.x - 0.1, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [vector(pin.bc().x - 0.1, pin.bc().y), mid])
+                        self.add_via_center(layers=self.layer_stack,
+                                            offset=mid,
+                                            directions=self.directions)
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin_pos)
+                    else:
+                        pin_pos = pin.bc()
+                        mid = vector(pin_pos.x, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [pin_pos, mid])
+                        self.add_via_center(layers=self.layer_stack,
+                                            offset=mid,
+                                            directions=self.directions)
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin.bc())
+        else: # port 1, situation different, top need shift
+            if non_preferred_route: 
+                # Add the horizontal trunk on the vertical layer!
+                self.add_path(self.vertical_layer,
+                            [vector(min_x - half_layer_width, trunk_offset.y),
+                            vector(max_x + half_layer_width, trunk_offset.y)])
+
+                # Route each pin to the trunk
+                for pin in pins:
+                    if pin.cy() < trunk_offset.y:
+                        pin_pos = pin.uc()
+                        # No bend needed here
+                        mid = vector(pin_pos.x, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [pin_pos, mid])                                      
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin.uc())
+                    else:
+                        pin_pos = pin.center()
+                        mid = vector(pin_pos.x - 0.1, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [vector(pin.uc().x - 0.1, pin.uc().y), mid])
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin_pos)
+            else:
+                # Add the horizontal trunk
+                self.add_path(self.horizontal_layer,
+                            [vector(min_x, trunk_offset.y),
+                            vector(max_x, trunk_offset.y)])
+
+                # Route each pin to the trunk
+                for pin in pins:
+                    # Find the correct side of the pin
+                    if pin.cy() < trunk_offset.y:
+                        pin_pos = pin.uc()
+                        mid = vector(pin_pos.x, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [pin_pos, mid])
+                        self.add_via_center(layers=self.layer_stack,
+                                            offset=mid,
+                                            directions=self.directions)
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin.uc())  
+                    else:
+                        pin_pos = pin.center()
+                        mid = vector(pin_pos.x - 0.1, trunk_offset.y)
+                        self.add_path(self.vertical_layer, [vector(pin.uc().x - 0.1, pin.uc().y), mid])
+                        self.add_via_center(layers=self.layer_stack,
+                                            offset=mid,
+                                            directions=self.directions)
+                        self.add_via_stack_center(from_layer=pin.layer,
+                                                  to_layer=self.vertical_layer,
+                                                  offset=pin_pos)
+                        
     def add_horizontal_trunk_route(self,
                                    pins,
                                    trunk_offset,
