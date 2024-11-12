@@ -18,6 +18,7 @@ from openram.base import lef
 from openram.sram_factory import factory
 from openram.tech import spice
 from openram import OPTS, print_time
+import re
 
 
 class sram_1bank(design, verilog, lef):
@@ -206,8 +207,8 @@ class sram_1bank(design, verilog, lef):
 
         if not OPTS.is_unit_test:
             print_time("Submodules", datetime.datetime.now(), start_time)
-    
-    def create_layout(self, position_add=0, mod=0):
+
+    def create_layout(self, position_add=0, mod=0, route_option="classic"):
         """ Layout creation """
         start_time = datetime.datetime.now()
         self.place_instances_changeable(position_add=position_add)
@@ -215,7 +216,7 @@ class sram_1bank(design, verilog, lef):
             print_time("Placement", datetime.datetime.now(), start_time)
 
         start_time = datetime.datetime.now()
-        self.route_layout(mod=mod)
+        self.route_layout(mod=mod, route_option=route_option)
 
         if not OPTS.is_unit_test:
             print_time("Routing", datetime.datetime.now(), start_time)
@@ -239,7 +240,7 @@ class sram_1bank(design, verilog, lef):
             # Only run this if not a unit test, because unit test will also verify it.
             self.DRC_LVS(final_verification=OPTS.route_supplies, force_check=OPTS.check_lvsdrc)
             print_time("Verification", datetime.datetime.now(), start_time)
-            
+
     def create_modules(self):
         debug.error("Must override pure virtual function.", -1)
 
@@ -319,7 +320,7 @@ class sram_1bank(design, verilog, lef):
             # Grid is left with many top level pins
             pass
 
-    def route_escape_pins(self, bbox=None, mod=0):
+    def route_escape_pins(self, bbox=None, mod=0, route_option="classic"):
         """
         Add the top-level pins for a single bank SRAM with control.
         """
@@ -361,17 +362,29 @@ class sram_1bank(design, verilog, lef):
                 else:
                     for bit in range(self.num_spare_cols):
                         pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
-            
-        from openram.router import signal_escape_router as router
-        # mod Use for control which edge/position the pins(dout) will be placed
-        # 0 -> default
-        # 1 -> all top/bottom
-        # 2 -> all left/right
-        rtr = router(layers=self.m3_stack,
-                     bbox=bbox,
-                     design=self,
-                     mod=mod)            
-        rtr.route(pins_to_route)
+
+        if route_option == "classic":
+            from openram.router import signal_escape_router as router
+            # mod Use for control which edge/position the pins(dout) will be placed
+            # 0 -> default
+            # 1 -> all top/bottom
+            # 2 -> all left/right
+            rtr = router(layers=self.m3_stack,
+                        bbox=bbox,
+                        design=self,
+                        mod=mod)
+            rtr.route(pins_to_route)
+        elif route_option == "fast":
+            # use io_pin_placer
+            # put the IO pins at the edge
+            from openram.router.io_pin_placer import io_pin_placer as placer
+            pl = placer(layers=self.m3_stack,
+                        bbox=bbox,
+                        design=self)
+            for name in pins_to_route:
+                debug.warning("pins_to_route pins -> {0}".format(name))
+            pl.add_io_pins_connected(pins_to_route)
+            #pl.add_io_pins(pins_to_route)
 
     def compute_bus_sizes(self):
         """ Compute the independent bus widths shared between two and four bank SRAMs """
@@ -784,7 +797,7 @@ class sram_1bank(design, verilog, lef):
             self.spare_wen_dff_insts = self.create_spare_wen_dff()
         else:
             self.num_spare_cols = 0
-            
+
     def place_instances_changeable(self, position_add=0):
         """
         This places the instances for a single bank SRAM with control
@@ -849,11 +862,10 @@ class sram_1bank(design, verilog, lef):
         self.add_layout_pins(add_vias=False)
         self.route_dffs(add_routes=False)
         self.remove_layout_pins()
-        
+
         for port in self.all_ports:
             # Add the extra position
-            self.data_bus_size[port] += position_add   
-                
+            self.data_bus_size[port] += position_add
         # Re-place with the new channel size
         self.place_dffs()
 
@@ -866,7 +878,7 @@ class sram_1bank(design, verilog, lef):
         x_offset = self.control_logic_insts[port].rx() - self.row_addr_dff_insts[port].width
         # It is above the control logic and the predecoder array
         y_offset = max(self.control_logic_insts[port].uy(), self.bank.predecoder_top)
-
+        y_offset = y_offset + 0.4 # fix, maigc number
         self.row_addr_pos[port] = vector(x_offset, y_offset)
         self.row_addr_dff_insts[port].place(self.row_addr_pos[port])
 
@@ -875,7 +887,7 @@ class sram_1bank(design, verilog, lef):
             # The row address bits are placed above the control logic aligned on the left.
             x_offset = self.control_pos[port].x - self.control_logic_insts[port].width + self.row_addr_dff_insts[port].width
             # If it can be placed above the predecoder and below the control logic, do it
-            y_offset = self.bank.predecoder_bottom
+            y_offset = min(self.control_logic_insts[port].by(), self.bank.predecoder_top)
             self.row_addr_pos[port] = vector(x_offset, y_offset)
             self.row_addr_dff_insts[port].place(self.row_addr_pos[port], mirror="XY")
 
@@ -1061,7 +1073,7 @@ class sram_1bank(design, verilog, lef):
                                         "spare_wen{0}[{1}]".format(port, bit),
                                         start_layer=pin_layer)
 
-    def route_layout(self, mod=0):
+    def route_layout(self, mod=0, route_option="classic"):
         """ Route a single bank SRAM """
 
         self.route_clk()
@@ -1085,11 +1097,10 @@ class sram_1bank(design, verilog, lef):
         if OPTS.perimeter_pins:
             # We now route the escape routes far enough out so that they will
             # reach past the power ring or stripes on the sides
-            self.route_escape_pins(bbox=init_bbox, mod=mod)
-            
+            self.route_escape_pins(bbox=init_bbox, mod=mod, route_option=route_option)
+
         if OPTS.route_supplies:
             self.route_supplies(init_bbox)
-
 
     def route_dffs(self, add_routes=True):
 

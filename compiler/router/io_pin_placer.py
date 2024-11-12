@@ -21,7 +21,7 @@ class io_pin_placer(router):
 
         # New pins are the side supply pins
         self.new_pins = {}
-        
+
         # added_io_pins
         self.io_pins_added_left = []
         self.io_pins_added_right = []
@@ -30,7 +30,7 @@ class io_pin_placer(router):
 
         # fake_pins, use for rename
         self.io_pins_fake =[]
-             
+
 
     def get_closest_edge(self, point):
         """ Return a point's the closest edge and the edge's axis direction. """
@@ -52,9 +52,9 @@ class io_pin_placer(router):
             return "right", True
         return "top", False
 
-            
-    def initial_position(self, pins): # pins is list [] 
-        """ Set the IO pin center at the perimeter """     
+
+    def initial_position(self, pins): # pins is list []
+        """ Set the IO pin center at the perimeter """
         pattern_clk = r'^clk'
         pattern_addr0 = r'^addr0'
         pattern_addr1 = r'^addr1'
@@ -82,14 +82,14 @@ class io_pin_placer(router):
                     vertical = True
                 elif edge == "bottom": # but for big sram, addr0[] may have pins at bottom, which is allowed
                     vertical = False
-                self.store_position(pin, edge, vertical)      
+                self.store_position(pin, edge, vertical)
             if re.match(pattern_addr1, pin.name): # all the addr1[] should be placed at right edge
                 if edge == "bottom" or edge == "right":
                     edge = "right"
                     vertical = True
                 elif edge == "top": # but for big sram, addr1[] may have pins at top, which is allowed
                     vertical = False
-                self.store_position(pin, edge, vertical)          
+                self.store_position(pin, edge, vertical)
             if re.match(pattern_din, pin.name): # din
                 self.store_position(pin, edge, vertical)
             if re.match(pattern_wmask, pin.name): # wmask
@@ -100,7 +100,7 @@ class io_pin_placer(router):
                 self.store_position(pin, edge, vertical)
             if re.match(pattern_web, pin.name): # web
                 self.store_position(pin, edge, vertical)
-        # special handle the dout pins, if r/rw ports     
+        # special handle the dout pins, if r/rw ports
         for pin in pins:
             if re.match(pattern_dout0, pin.name):
                 edge = "bottom"
@@ -115,7 +115,7 @@ class io_pin_placer(router):
     def check_overlap(self, pin_position, edge):
         """ Return the suggested position to aviod overlap """
         ll, ur = self.bbox
-        c = pin_position # original source pin center 
+        c = pin_position # original source pin center
         offset = 0.95 + 0.19 # FIX: this is the magic number to overcome the ovetflow problem at the boundary, may need a method
         add_distance = 0
 
@@ -124,26 +124,26 @@ class io_pin_placer(router):
             pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_down)
             via_to_close = False
             # if cannot direct place below the source pin, need move towards right, and ensure the min. distance between vias
-            while pin_to_close or via_to_close:         
-                debug.warning("overlap, changing position") 
-                add_distance = add_distance + 0.1 
+            while pin_to_close or via_to_close:
+                debug.warning("overlap, changing position")
+                add_distance = add_distance + 0.1
                 fake_center = vector(c.x + add_distance, ll.y - self.track_wire * 2 + offset)
-                pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_down) 
-                via_to_close = abs(fake_center.x - c.x) < 0.6 
+                pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_down)
+                via_to_close = abs(fake_center.x - c.x) < 0.6
         if edge == "top":
             fake_center = vector(c.x, ur.y + self.track_wire * 2 - offset)
             pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_up)
-            via_to_close = False        
-            # if cannot direct place below the source pin, need move towards right, and ensure the min. distance between vias                    
-            while pin_to_close or via_to_close:         
+            via_to_close = False
+            # if cannot direct place below the source pin, need move towards right, and ensure the min. distance between vias
+            while pin_to_close or via_to_close:
                 debug.warning("overlap, changing position")
                 add_distance = add_distance + 0.1
                 fake_center = vector(c.x + add_distance, ur.y + self.track_wire * 2 - offset)
-                pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_up)  
-                via_to_close = abs(fake_center.x - c.x) < 0.6 
+                pin_to_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_up)
+                via_to_close = abs(fake_center.x - c.x) < 0.6
 
-        return fake_center    
-        
+        return fake_center
+
 
     def store_dout_position(self, pin, edge, vertical):
         pin_position = pin.center()
@@ -151,14 +151,14 @@ class io_pin_placer(router):
         # store the center position, rect, layer of fake pin, here make sure the pin in the gds will be big enough
         layer = self.get_layer(int(not vertical))
         half_wire_vector = vector([self.half_wire] * 2)
-        nll = pin_position - half_wire_vector - half_wire_vector 
+        nll = pin_position - half_wire_vector - half_wire_vector
         nur = pin_position + half_wire_vector + half_wire_vector
         rect = [nll, nur]
         #fake_pin = [pin.name() + "_" + "fake", pin_position, rect, layer]
         fake_pin = graph_shape(name=pin.name + "_" + "fake",
                           rect=rect,
                           layer_name_pp=layer)
-        
+
         if edge == "left":
             self.io_pins_added_left.append(fake_pin)
         elif edge == "bottom":
@@ -168,10 +168,10 @@ class io_pin_placer(router):
         elif edge == "top":
             self.io_pins_added_up.append(fake_pin)
 
-        self.io_pins_fake.append(fake_pin)    
+        self.io_pins_fake.append(fake_pin)
         debug.warning("pin added: {0}".format(fake_pin))
-        
- 
+
+
     def store_position(self, pin, edge, vertical): # also need to store the source pin
         ll, ur = self.bbox
         c = pin.center()
@@ -197,14 +197,14 @@ class io_pin_placer(router):
         # store the center position, rect, layer of fake pin, here make sure the pin in the gds will be big enough
         layer = self.get_layer(int(not vertical))
         half_wire_vector = vector([self.half_wire] * 2)
-        nll = fake_center - half_wire_vector - half_wire_vector 
+        nll = fake_center - half_wire_vector - half_wire_vector
         nur = fake_center + half_wire_vector + half_wire_vector
         rect = [nll, nur]
         #fake_pin = [pin.name() + "_" + "fake", fake_center, rect, layer]
         fake_pin = graph_shape(name=pin.name + "_" + "fake",
                           rect=rect,
                           layer_name_pp=layer)
-        
+
         if edge == "left":
             self.io_pins_added_left.append(fake_pin)
         elif edge == "bottom":
@@ -213,111 +213,9 @@ class io_pin_placer(router):
             self.io_pins_added_right.append(fake_pin)
         elif edge == "top":
             self.io_pins_added_up.append(fake_pin)
-        
+
         self.io_pins_fake.append(fake_pin)
         debug.warning("pin added: {0}".format(fake_pin))
-        
-     
-    def create_fake_pin(self, pin):
-        """ Create a fake pin on the perimeter orthogonal to the given pin. """
-
-        ll, ur = self.bbox
-        c = pin.center()
-        print("inside pin name")
-        print("----------------------------------------------------------")
-        print(pin.name)
-        # Find the closest edge
-        edge, vertical = self.get_closest_edge(c)
-        # Relocate the pin position of addr/dout
-        pattern_addr = r'^addr'
-        pattern_dout = r'^dout'
-        if re.match(pattern_addr, pin.name):# all the addr[] should be placed at vertical edge
-            if edge == "top" or edge == "left":
-                edge = "left"
-                vertical = True
-            elif edge == "bottom" or edge == "right":
-                edge = "right"
-                vertical = True
-        
-        if re.match(pattern_dout, pin.name):# all the dout[] should be placed at horizontal edge
-            if edge == "bottom" or edge == "right":
-                edge = "bottom"
-                vertical = False
-            elif edge == "top" or edge == "left":
-                edge = "top"
-                vertical = False
-
-        offset = 0.95 + 0.19 # FIX: this is the magic number to overcome the ovetflow problem at the boundary, may need a method
-        add_distance = 0
-        # Keep the fake pin out of the SRAM layout are so that they won't be
-        # blocked by previous signals if they're on the same orthogonal line
-        if edge == "left":
-            fake_center = vector(ll.x - self.track_wire * 2 + offset, c.y)
-            is_too_close = any(abs(pin_added.center().y - fake_center.y) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_left)                  
-            while is_too_close:         
-                debug.warning("overlap, changing position") 
-                add_distance = add_distance + 0.1#+ 0.4 + self.half_wire * 4
-                fake_center = vector(ll.x - self.track_wire * 2 + offset, c.y + add_distance)
-                is_too_close = any(abs(pin_added.center().y - fake_center.y) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_left)  
-                              
-        if edge == "bottom":
-            fake_center = vector(c.x, ll.y - self.track_wire * 2 + offset)
-            is_too_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_down)
-            while is_too_close:         
-                debug.warning("overlap, changing position") 
-                add_distance = add_distance + 0.1#0.4 + self.half_wire * 4
-                fake_center = vector(c.x + add_distance, ll.y - self.track_wire * 2 + offset)
-                is_too_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_down)   
-            
-        if edge == "right":
-            fake_center = vector(ur.x + self.track_wire * 2 - offset, c.y)
-            is_too_close = any(abs(pin_added.center().y - fake_center.y) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_right)
-            while is_too_close:         
-                debug.warning("overlap, changing position") 
-                add_distance = add_distance + 0.1#0.4 + self.half_wire * 4
-                fake_center = vector(ur.x + self.track_wire * 2 - offset, c.y + add_distance)
-                # debug
-                for pin_added in self.io_pins_added_right:
-                    dis = abs(pin_added.center().y - fake_center.y)
-                    debug.warning("current position is {0}".format(fake_center))
-                    debug.warning("distance from {0} is {1}".format(pin_added, dis))
-                    debug.warning("must disrance is {0}".format(0.4 + self.half_wire * 4))
-                is_too_close = any(abs(pin_added.center().y - fake_center.y) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_right)   
-            
-        if edge == "top":
-            fake_center = vector(c.x, ur.y + self.track_wire * 2 - offset)
-            is_too_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_up)
-            while is_too_close:         
-                debug.warning("overlap, changing position")
-                add_distance = add_distance + 0.1#0.4 + self.half_wire * 4 
-                fake_center = vector(c.x + add_distance, ur.y + self.track_wire * 2 - offset)
-                is_too_close = any(abs(pin_added.center().x - fake_center.x) < (0.4 + self.half_wire * 4)for pin_added in self.io_pins_added_up)  
-                    
-        # Create the fake pin shape, here make sure the pin in the gds will be big enough
-        layer = self.get_layer(int(not vertical))
-        half_wire_vector = vector([self.half_wire] * 2)
-        nll = fake_center - half_wire_vector - half_wire_vector 
-        nur = fake_center + half_wire_vector + half_wire_vector
-        
-        rect = [nll, nur]
-        pin = graph_shape(name=pin.name + "_" + "fake",
-                          rect=rect,
-                          layer_name_pp=layer)
-        print("this create_fake_pin")
-        print(pin.name)
-        print(pin.center)
-
-        if edge == "left":
-            self.io_pins_added_left.append(pin)
-        elif edge == "bottom":
-            self.io_pins_added_down.append(pin)
-        elif edge == "right":
-            self.io_pins_added_right.append(pin)
-        elif edge == "top":
-            self.io_pins_added_up.append(pin)
-        debug.warning("pin added: {0}".format(pin))
-        
-        return pin, vertical, add_distance
 
 
     def add_io_pins(self, pin_names):
@@ -336,13 +234,13 @@ class io_pin_placer(router):
         for name in self.pins:
             pin = next(iter(self.pins[name]))
             pin_list.append(pin)
-         
-        self.initial_position(pin_list)    
+
+        self.initial_position(pin_list)
 
         # Change IO pin names, which means "internal name" will be used, and internal io pins will not have label such as "dout0[0]"
         self.replace_layout_pins(pin_names)
-    
-    
+
+
     def add_io_pins_connected(self, pin_names):
         """ Add IO pins on the edges WITH routing them. """
         debug.info(1, "Adding IO pins on the perimeter...")
@@ -361,9 +259,9 @@ class io_pin_placer(router):
             pin = next(iter(self.pins[name]))
             pin_list.append(pin)
             debug.warning("the pins in self.pins -> {0}".format(name))
-            
-        self.initial_position(pin_list)    
-        
+
+        self.initial_position(pin_list)
+
         # add fake io pins at the perimeter, which will be used for routing
         for fake_pin in self.io_pins_fake:
             self.design.add_layout_pin(text=fake_pin.name,
@@ -372,7 +270,7 @@ class io_pin_placer(router):
                                        width=fake_pin.width(),
                                        height=fake_pin.height())
 
-        # connect the source_pin and io_pin(target) 
+        # connect the source_pin and io_pin(target)
         self.connect_pins(pin_names)
 
         # remove the fake pin before change the name, in order to avoid possible problem
@@ -381,8 +279,8 @@ class io_pin_placer(router):
 
         # Change IO pin names, which means "internal name" will be used, and internal io pins will not have label such as "dout0[0]"
         self.replace_layout_pins(pin_names)
-      
-     
+
+
     def connect_pins(self, pin_names): # pin_names should be a list
         """ Add IO pins on the edges, and connect them to the internal one, not-graph like process """
         debug.info(1, "connecting to io pins...")
@@ -392,18 +290,18 @@ class io_pin_placer(router):
             source_pin = next(iter(self.pins[pin_name]))
             for fake_pin in self.io_pins_fake:
                 if pin_name + "_" + "fake" == fake_pin.name:
-                    target_pin = fake_pin 
-                    break        
+                    target_pin = fake_pin
+                    break
             # special hanlde dout pins
             if re.match(pattern_dout, pin_name):
                 number_str = re.findall(r'\[(\d+)\]', pin_name)
                 if number_str:
                     number = int(number_str[0])
                     if number % 2 == 0:
-                        is_up = True 
+                        is_up = True
                     else:
                         is_up = False
-                point_list = self.decide_point(source_pin, target_pin, is_up) 
+                point_list = self.decide_point(source_pin, target_pin, is_up)
                 self.add_wire(point_list)
             # other pins
             else:
@@ -414,7 +312,7 @@ class io_pin_placer(router):
                 self.add_wire(point_list)
 
 
-    def add_wire(self, point_list): 
+    def add_wire(self, point_list):
         if len(point_list) == 2:
             # direct connect
             self.add_line(point_list[0], point_list[1])
@@ -425,32 +323,32 @@ class io_pin_placer(router):
             self.add_line(point_list[1], point_list[2])
             self.add_via(point_list[2])
             self.add_line(point_list[2], point_list[3])
-        
+
 
     def add_line(self, point_1, point_2):
         if round(point_1.y, 3) == round(point_2.y, 3):
-            # horizontal m3 
+            # horizontal m3
             self.design.add_path(self.get_layer(False), [point_1, point_2])
         else:
             # vertical m4
             self.design.add_path(self.get_layer(True), [point_1, point_2])
-        
+
 
     def add_via(self, point):
         # currently only m3-m4 vias are supported in this method
         # usd in order to make "z" shape routing only
-        self.design.add_via_stack_center(from_layer=self.get_layer(False), 
-                                         to_layer=self.get_layer(True), 
+        self.design.add_via_stack_center(from_layer=self.get_layer(False),
+                                         to_layer=self.get_layer(True),
                                          offset=point)
-        
+
 
     def add_start_via(self, point):
         # currently only m3-m4 vias are supported in this method
         # used in source_pin only
-        self.design.add_via_stack_center(from_layer=self.get_layer(False), 
-                                         to_layer=self.get_layer(True), 
+        self.design.add_via_stack_center(from_layer=self.get_layer(False),
+                                         to_layer=self.get_layer(True),
                                          offset=point)
-      
+
 
     def add_big_plate(self, layer, offset, width, height):
         # add rectagle at internal source pin, which avoid jog/non-preferred routing, but could implement shift-routing
@@ -460,19 +358,19 @@ class io_pin_placer(router):
                              offset=offset,
                              width=width,
                              height=height)
-    
+
 
     def decide_point(self, source_pin, target_pin, is_up=False):
         ll, ur = self.bbox
         offset = 0.95 + 0.19 # FIX: this is the magic number to overcome the ovetflow problem at the boundary, may need a method
         pattern_clk = r'^clk'
         pattern_csb = r'^csb'
-		# internal -> left      
+        # internal -> left
         if round(target_pin.center().x, 3) == round(ll.x - self.track_wire * 2 + offset, 3):
             # special handle clk0
             if re.match(pattern_clk, source_pin.name):
                 return [vector(source_pin.rc().x, source_pin.rc().y + 0.32), target_pin.lc()]# 0.32 should be same in initial_position
-            # special handel csb0         
+            # special handel csb0
             elif re.match(pattern_csb, source_pin.name):
                 return [vector(source_pin.rc().x, source_pin.rc().y - 0.32), target_pin.lc()]# 0.32 should be same in initial_position
             else:
@@ -482,11 +380,11 @@ class io_pin_placer(router):
         if round(target_pin.center().x, 3) == round(ur.x + self.track_wire * 2 - offset, 3):
             # special handel clk1
             if re.match(pattern_clk, source_pin.name):
-                return [vector(source_pin.lc().x, source_pin.lc().y - 0.32), target_pin.rc()]# 0.32 should be same in initial_position   
-            # special handle csb0         
+                return [vector(source_pin.lc().x, source_pin.lc().y - 0.32), target_pin.rc()]# 0.32 should be same in initial_position
+            # special handle csb0
             elif re.match(pattern_csb, source_pin.name):
-                return [vector(source_pin.lc().x, source_pin.lc().y + 0.32), target_pin.rc()]# 0.32 should be same in initial_position  
-            else:         
+                return [vector(source_pin.lc().x, source_pin.lc().y + 0.32), target_pin.rc()]# 0.32 should be same in initial_position
+            else:
                 # direct connect possible
                 return [source_pin.lc(), target_pin.rc()]
         # internal -> top, need to add start_via m3->m4
@@ -499,13 +397,13 @@ class io_pin_placer(router):
             # need intermediate point
                 via_basic_y = self.design.bank.height + 3 # 3 is magic number, make sure out of bank area
                 is_up = not is_up# Be attention, for channel at the top, the is_up should be inverted! Otherwise will cause overlap!
-                if is_up: 
+                if is_up:
                     via_basic_y = via_basic_y + 0.5
                 else:
                     via_basic_y = via_basic_y - 0.5
                 point_1 = vector(source_pin.center().x, via_basic_y)
                 point_2 = vector(target_pin.center().x, via_basic_y)
-                return [source_pin.bc(), point_1, point_2, target_pin.uc()]      
+                return [source_pin.bc(), point_1, point_2, target_pin.uc()]
         # internal -> bottom, need to add start_via m3->m4
         if round(target_pin.center().y, 3) == round(ll.y - self.track_wire * 2 + offset, 3):
             self.add_start_via(source_pin.center())
@@ -521,14 +419,14 @@ class io_pin_placer(router):
                     via_basic_y = via_basic_y - 0.5
                 point_1 = vector(source_pin.center().x, via_basic_y)
                 point_2 = vector(target_pin.center().x, via_basic_y)
-                return [source_pin.uc(), point_1, point_2, target_pin.bc()]             
-                
-            
+                return [source_pin.uc(), point_1, point_2, target_pin.bc()]
+
+
     def remove_io_pins(self, pin_name):
         # remove io pin in gds, so we could reroute
         self.design.remove_layout_pin(pin_name)
-    
-    
+
+
     def replace_layout_pins(self, pin_names):
         """ Change the IO pin names with new ones around the perimeter. """
         for pin_name in pin_names:
@@ -537,8 +435,7 @@ class io_pin_placer(router):
                 if pin.name == perimeter_pin_name:
                     perimeter_pin = pin
                     self.design.replace_layout_pin(pin_name, perimeter_pin)
-                    break      
-           
+                    break
 
 
 

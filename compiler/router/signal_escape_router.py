@@ -24,13 +24,13 @@ class signal_escape_router(router):
 
         # New pins are the side supply pins
         self.new_pins = {}
-        
-		# Use for add distance of dout pins at the perimeter
+
+        # Use for add distance of dout pins at the perimeter
         self.distance_right = 0
 
         self.distance_left = 0
-        
-		# Use for control which edge/position the pins(dout) will be placed
+
+        # Use for control which edge/position the pins(dout) will be placed
         # 0 -> default
         # 1 -> all top/bottom
         # 2 -> all left/right
@@ -206,16 +206,16 @@ class signal_escape_router(router):
             fake_center = vector(ur.x + self.track_wire * 2, c.y)
         if edge == "top":
             fake_center = vector(c.x, ur.y + self.track_wire * 2)
-            
+
         # relocate the pin position
         pattern = r'^dout'
         if re.match(pattern, pin.name):
-            
+
             if self.state_mod == 0:
                 pass# do not change, default
-            
+
             elif self.state_mod == 1: # all top/bottom
-                if edge == "right": 
+                if edge == "right":
                     vertical = False
                     fake_center = vector(c.x, ll.y - self.track_wire * 2)
                     self.distance_right += 1
@@ -223,8 +223,8 @@ class signal_escape_router(router):
                     if edge == "left":
                         vertical = False
                         fake_center = vector(c.x, ll.y + self.track_wire * 2)
-                        self.distance_left += 1   
-            
+                        self.distance_left += 1
+
             elif self.state_mod == 2: # all left/right
                 if (edge == "bottom") or (edge == "right"):# change to the east
                     vertical = True
@@ -234,10 +234,10 @@ class signal_escape_router(router):
                     if (edge == "top") or (edge == "left"):# change to the west
                         vertical = True
                         fake_center = vector(ll.x - self.track_wire * 2, ur.y - 30 - self.distance_left)
-                        self.distance_left += 1 
+                        self.distance_left += 1
             else:
-                debug.error("wrong state mod!", -1)              
-            
+                debug.error("wrong state mod!", -1)
+
         # Create the fake pin shape
         layer = self.get_layer(int(not vertical))
         half_wire_vector = vector([self.half_wire] * 2)

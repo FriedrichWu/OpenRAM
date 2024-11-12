@@ -20,7 +20,7 @@ class sram():
     results.
     We can later add visualizer and other high-level functions as needed.
     """
-    def __init__(self, sram_config=None, name=None):
+    def __init__(self, sram_config=None, name=None, route_option="classic"):
 
         # Create default configs if custom config isn't provided
         if sram_config is None:
@@ -48,67 +48,74 @@ class sram():
         start_time = datetime.datetime.now()
 
         self.name = name
+        self.route_option = route_option # "classic" or "fast"
 
         from openram.modules.sram_1bank import sram_1bank as sram
 
         num_ports = OPTS.num_rw_ports + OPTS.num_r_ports + OPTS.num_w_ports
         self.s = sram(name, sram_config)
         self.s.create_netlist()# not placed & routed jet
-        cur_state = "IDLE"
-        if not OPTS.netlist_only:
-            i = 0
-            while i < (OPTS.word_size + 100):
-                
-                debug.warning("current state: state = {0}".format(cur_state))
-                
-                if cur_state == "IDLE":# default, fisrt try
-                    try: 
-                        self.s.create_layout(position_add=i)
-                    except AssertionError as e:
-                        cur_state = "ALL_TOP_BOTTOM"
-                        del self.s
-                        self.s = sram(name, sram_config)
-                        self.s.create_netlist()
-                        if num_ports > 1:
-                            i = 16
-                        else:
-                            i = 0 
-                        continue
-                    cur_state = "FINISH"
-                    break
 
-                elif cur_state == "ALL_TOP_BOTTOM":
-                    try:
-                        self.s.create_layout(position_add=i, mod=1)
-                    except AssertionError as e:
-                        cur_state = "ALL_LEFT_RIGHT"
-                        i = OPTS.word_size + 24 
-                        del self.s
-                        self.s = sram(name, sram_config)
-                        self.s.create_netlist()
-                        continue
-                    cur_state = "FINISH"
-                    break
-                 
-                elif cur_state == "ALL_LEFT_RIGHT":
-                    try:
-                        self.s.create_layout(position_add=i, mod=2)
-                    except AssertionError as e:
-                        cur_state = "ALL_LEFT_RIGHT"
-                        i = i + 1
-                        if i == (99 + OPTS.word_size):# failed in rounting
-                            debug.error("Failed in rounting", -1)
-                            break
-                        del self.s
-                        self.s = sram(name, sram_config)
-                        self.s.create_netlist() 
-                        continue
-                    cur_state = "FINISH"
-                    break
-                else:
-                    cur_state = "FINISH"
-                    break
-                                                      
+        # choose the routung method, maze router or constructive
+        if self.route_option == "classic":
+            cur_state = "IDLE"
+            if not OPTS.netlist_only:
+                i = 0
+                while i < (OPTS.word_size + 100):
+
+                    debug.warning("current state: state = {0}".format(cur_state))
+
+                    if cur_state == "IDLE":# default, fisrt try
+                        try:
+                            self.s.create_layout(position_add=i)
+                        except AssertionError as e:
+                            cur_state = "ALL_TOP_BOTTOM"
+                            del self.s
+                            self.s = sram(name, sram_config)
+                            self.s.create_netlist()
+                            if num_ports > 1:
+                                i = 16
+                            else:
+                                i = 0
+                            continue
+                        cur_state = "FINISH"
+                        break
+
+                    elif cur_state == "ALL_TOP_BOTTOM":
+                        try:
+                            self.s.create_layout(position_add=i, mod=1)
+                        except AssertionError as e:
+                            cur_state = "ALL_LEFT_RIGHT"
+                            i = OPTS.word_size + 24
+                            del self.s
+                            self.s = sram(name, sram_config)
+                            self.s.create_netlist()
+                            continue
+                        cur_state = "FINISH"
+                        break
+
+                    elif cur_state == "ALL_LEFT_RIGHT":
+                        try:
+                            self.s.create_layout(position_add=i, mod=2)
+                        except AssertionError as e:
+                            cur_state = "ALL_LEFT_RIGHT"
+                            i = i + 1
+                            if i == (99 + OPTS.word_size):# failed in rounting
+                                debug.error("Failed in rounting", -1)
+                                break
+                            del self.s
+                            self.s = sram(name, sram_config)
+                            self.s.create_netlist()
+                            continue
+                        cur_state = "FINISH"
+                        break
+                    else:
+                        cur_state = "FINISH"
+                        break
+        elif self.route_option == "fast":
+            if not OPTS.netlist_only:
+                self.s.create_layout(route_option=route_option)
+
         if not OPTS.is_unit_test:
             print_time("SRAM creation", datetime.datetime.now(), start_time)
 
@@ -162,7 +169,7 @@ class sram():
         spname = OPTS.output_path + self.s.name + ".sp"
         debug.print_raw("SP: Writing to {0}".format(spname))
         self.sp_write(spname)
-        ''' #comment the following state when generating big sram, and then disable drc/lvs, because maigc_ext stuck 
+        #''' #comment the following state when generating big sram, and then disable drc/lvs, because maigc_ext stuck
         # Save a functional simulation file with default period
         functional(self.s,
                    spname,
@@ -184,7 +191,7 @@ class sram():
         d.targ_write_ports = [self.s.write_ports[0]]
         d.write_delay_stimulus()
         print_time("DELAY", datetime.datetime.now(), start_time)
-        ''' #comment the above when generating big sram, and then disable drc/lvs, bevause magic_ext stuck
+        #''' #comment the above when generating big sram, and then disable drc/lvs, bevause magic_ext stuck
         # Save trimmed spice file
         temp_trim_sp = "{0}trimmed.sp".format(OPTS.output_path)
         self.sp_write(temp_trim_sp, lvs=False, trim=True)
