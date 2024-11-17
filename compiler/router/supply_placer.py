@@ -10,13 +10,9 @@ from .graph import graph
 from .graph_shape import graph_shape
 from .router import router
 
+class supply_placer(router):
 
-class supply_router(router):
-    """
-    This is the supply router that uses the Hanan grid graph method.
-    """
-
-    def __init__(self, layers, design, bbox=None, pin_type=None):
+    def __init__(self, layers, design, bbox=None, pin_type=None, ext_vdd_name="vccd1", ext_gnd_name="vssd1"):
 
         # `router` is the base router class
         router.__init__(self, layers, design, bbox)
@@ -26,10 +22,20 @@ class supply_router(router):
         self.pin_type = pin_type
         # New pins are the side supply pins
         self.new_pins = {}
+        # external power name of the whole macro
+        self.ext_vdd_name = ext_vdd_name
+        self.ext_gnd_name = ext_gnd_name
+        # instances
+        self.insts = self.design.insts
+        # moat pins
+        self.moat_pins = []
+        # io pins
+        self.io_pins_left = []
+        self.io_pins_right = []
+        self.io_pins_top = []
+        self.io_pins_bottom = []
 
-
-    def route(self, vdd_name="vdd", gnd_name="gnd"):
-        """ Route the given pins in the given order. """
+    def route_bank(self, vdd_name="vdd", gnd_name="gnd"):
         debug.info(1, "Running router for {} and {}...".format(vdd_name, gnd_name))
 
         # Save pin names
@@ -39,9 +45,9 @@ class supply_router(router):
         # Prepare gdsMill to find pins and blockages
         self.prepare_gds_reader()
 
-        # Find pins to be routed
-        self.find_pins(vdd_name)
-        self.find_pins(gnd_name)
+        # Find vdd/gnd pins of bank, to be routed
+        self.moat_pins = self.find_pins_inside(vdd_name)
+        self.find_pins_inside(gnd_name)
 
         # Find blockages and vias
         self.find_blockages()
@@ -50,16 +56,6 @@ class supply_router(router):
         # Convert blockages and vias if they overlap a pin
         self.convert_vias()
         self.convert_blockages()
-
-        # Add side pins
-        if self.pin_type in ["top", "bottom", "right", "left"]:
-            self.add_side_pin(vdd_name)
-            self.add_side_pin(gnd_name)
-        elif self.pin_type == "ring":
-            self.add_ring_pin(vdd_name)
-            self.add_ring_pin(gnd_name)
-        else:
-            debug.warning("Side supply pins aren't created.")
 
         # Add vdd and gnd pins as blockages as well
         # NOTE: This is done to make vdd and gnd pins DRC-safe
@@ -92,12 +88,101 @@ class supply_router(router):
                 debug.info(2, "Routed {} of {} supply pins".format(routed_count, routed_max))
 
 
+    #def route_moat(self):
+        
+    #def route_other(self):
+
+    def check_overlap(self, moat_pin, io_pin_names): 
+        # use all the IO pins(at correspoding edge) to check overlap, check 1 moat vdd pin, give the corresponding target/source position as list, and pull the source up to m3  
+        add_distance = 0
+        direction = 1
+        self.prepare_io_pins(io_pin_names)
+        # judge the edge of moat vdd
+        edge = self.get_closest_edge(moat_pin)
+        source_center = moat_pin.center()
+        if edge == "bottom":
+            pin_too_close = any(abs(io_pin.center().x - source_center.x) < self.track_width for io_pin in self.io_pins_bottom)
+            tmp_center = source_center
+            while pin_too_close:
+                tmp_center = source_center
+                add_distance = add_distance + 0.1
+                if direction == 1: # right shift
+                    tmp_center = tmp_center + add_distance 
+                else: # left shift
+                    tmp_center = tmp_center - add_distance
+                pin_too_close = any(abs(io_pin.center().x - tmp_center.x) < self.track_width for io_pin in self.io_pins_bottom)
+            if tmp_center == source_center: # no overlap 
+                # no jog, direct pull to m3
+                self.design.copy_power_pin(moat_pin, loc=None, directions=None, new_name="")
+            else: # need jog
+                # shift the center
+                # add rectangle at same layer (original)
+                self.design.add
+        elif edge == "top":
+            pass
+        elif edge == "left":
+            pass
+        else: #right
+            pass
+
+    def prepare_io_pins(self, io_pin_names):
+        # io_pin_names is a list
+        # find all the io pins
+        for pin_name in io_pin_names:
+            self.find_pins(pin_name)# pin now in self.pins
+            io_pin = self.pins[pin_name]
+            self.find_closest_edge(io_pin)
+
+
+    def get_closest_edge(self, pin):
+        """ Return a point's the closest edge and the edge's axis direction. Here we use to find the edge of moat vdd """
+
+        ll, ur = self.bbox
+        point = pin.center()
+        # Snap the pin to the perimeter and break the iteration
+        ll_diff_x = abs(point.x - ll.x)
+        ll_diff_y = abs(point.y - ll.y)
+        ur_diff_x = abs(point.x - ur.x)
+        ur_diff_y = abs(point.y - ur.y)
+        min_diff = min(ll_diff_x, ll_diff_y, ur_diff_x, ur_diff_y)
+
+        if min_diff == ll_diff_x:
+            return "left"
+        if min_diff == ll_diff_y:
+            return "bottom"
+        if min_diff == ur_diff_x:
+            return "right"
+        return "top"
+
+       
+    def find_closest_edge(self, pin):
+        """ Use to find the edge, where the io pin locats """
+
+        ll, ur = self.bbox
+        point = pin.center()
+        # Snap the pin to the perimeter and break the iteration
+        ll_diff_x = abs(point.x - ll.x)
+        ll_diff_y = abs(point.y - ll.y)
+        ur_diff_x = abs(point.x - ur.x)
+        ur_diff_y = abs(point.y - ur.y)
+        min_diff = min(ll_diff_x, ll_diff_y, ur_diff_x, ur_diff_y)
+
+        if min_diff == ll_diff_x:
+            self.io_pins_left.append(pin)
+        elif min_diff == ll_diff_y:
+            self.io_pins_bottom.append(pin)
+        elif min_diff == ur_diff_x:
+            self.io_pins_right.append(pin)
+        else:
+            self.io_pins_top.append(pin)        
+
+
     def add_side_pin(self, pin_name, side, num_vias=3, num_fake_pins=4):
         """ Add supply pin to one side of the layout. """
 
         ll, ur = self.bbox
         vertical = side in ["left", "right"]
-        inner = pin_name == self.vdd_name
+        inner = pin_name == self.ext_vdd_name
 
         # Calculate wires' wideness
         wideness = self.track_wire * num_vias + self.track_space * (num_vias - 1)
@@ -179,7 +264,7 @@ class supply_router(router):
                                   rect=rect,
                                   layer_name_pp=layer)
             new_pins.append(new_pin)
-            self.pins[pin_name].update(fake_pins)
+            #self.pins[pin_name].update(fake_pins)
             self.fake_pins.extend(fake_pins)
 
         # Add vias to the corners

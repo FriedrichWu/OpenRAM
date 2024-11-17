@@ -53,6 +53,9 @@ class sram_1bank(design, verilog, lef):
         # delay control logic does not have RBLs
         self.has_rbl = OPTS.control_logic != "control_logic_delay"
 
+		# IO pins, except power, list of pin names
+        self.pins_to_route = []
+
     def add_pins(self):
         """ Add pins for entire SRAM. """
 
@@ -244,6 +247,31 @@ class sram_1bank(design, verilog, lef):
     def create_modules(self):
         debug.error("Must override pure virtual function.", -1)
 
+    def route_supplies_constructive(self, bbox=None):
+        # prepare the "router"
+        from openram.router.supply_placer import supply_placer as router
+        rtr = router(layers=self.supply_stack,
+                     design=self,
+                     bbox=bbox,
+                     pin_type=OPTS.supply_pin_type,
+                     ext_vdd_name=self.vdd_name,
+                     ext_gnd_name=self.gnd_name)
+        # add power rings / side pins
+        if OPTS.supply_pin_type in ["top", "bottom", "right", "left"]:
+            rtr.add_side_pin(self.vdd_name)
+            rtr.add_side_pin(self.gnd_name)
+        elif OPTS.supply_pin_type == "ring":
+            rtr.add_ring_pin(self.vdd_name)# ring vdd name
+            rtr.add_ring_pin(self.gnd_name)
+        else:
+            debug.warning("Side supply pins aren't created.")
+
+        # maze router the bank power pins 
+        for pin_name in ["vdd", "gnd"]:
+            for inst in self.bank_insts:
+                self.copy_power_pins(inst, pin_name)
+        rtr.route_bank()
+
     def route_supplies(self, bbox=None):
         """ Route the supply grid and connect the pins to them. """
 
@@ -324,44 +352,41 @@ class sram_1bank(design, verilog, lef):
         """
         Add the top-level pins for a single bank SRAM with control.
         """
-
-        # List of pin to new pin name
-        pins_to_route = []
         for port in self.all_ports:
             # Connect the control pins as inputs
             for signal in self.control_logic_inputs[port]:
                 if signal.startswith("rbl"):
                     continue
                 if signal=="clk":
-                    pins_to_route.append("{0}{1}".format(signal, port))
+                    self.pins_to_route.append("{0}{1}".format(signal, port))
                 else:
-                    pins_to_route.append("{0}{1}".format(signal, port))
+                    self.pins_to_route.append("{0}{1}".format(signal, port))
 
             if port in self.write_ports:
                 for bit in range(self.word_size + self.num_spare_cols):
-                    pins_to_route.append("din{0}[{1}]".format(port, bit))
+                    self.pins_to_route.append("din{0}[{1}]".format(port, bit))
 
             if port in self.readwrite_ports or port in self.read_ports:
                 for bit in range(self.word_size + self.num_spare_cols):
-                    pins_to_route.append("dout{0}[{1}]".format(port, bit))
+                    self.pins_to_route.append("dout{0}[{1}]".format(port, bit))
 
             for bit in range(self.col_addr_size):
-                pins_to_route.append("addr{0}[{1}]".format(port, bit))
+                self.pins_to_route.append("addr{0}[{1}]".format(port, bit))
 
             for bit in range(self.row_addr_size):
-                pins_to_route.append("addr{0}[{1}]".format(port, bit + self.col_addr_size))
+                self.pins_to_route.append("addr{0}[{1}]".format(port, bit + self.col_addr_size))
 
             if port in self.write_ports:
                 if self.write_size != self.word_size:
                     for bit in range(self.num_wmasks):
-                        pins_to_route.append("wmask{0}[{1}]".format(port, bit))
+                        self.pins_to_route.append("wmask{0}[{1}]".format(port, bit))
 
             if port in self.write_ports:
                 if self.num_spare_cols == 1:
-                    pins_to_route.append("spare_wen{0}".format(port))
+                    self.pins_to_route.append("spare_wen{0}".format(port))
                 else:
                     for bit in range(self.num_spare_cols):
-                        pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
+                        self.pins_to_route.append("spare_wen{0}[{1}]".format(port, bit))
 
         if route_option == "classic":
             from openram.router import signal_escape_router as router
@@ -373,7 +398,7 @@ class sram_1bank(design, verilog, lef):
                         bbox=bbox,
                         design=self,
                         mod=mod)
-            rtr.route(pins_to_route)
+            rtr.route(self.pins_to_route)
         elif route_option == "fast":
             # use io_pin_placer
             # put the IO pins at the edge
@@ -381,10 +406,10 @@ class sram_1bank(design, verilog, lef):
             pl = placer(layers=self.m3_stack,
                         bbox=bbox,
                         design=self)
-            for name in pins_to_route:
+            for name in self.pins_to_route:
                 debug.warning("pins_to_route pins -> {0}".format(name))
-            pl.add_io_pins_connected(pins_to_route)
-            #pl.add_io_pins(pins_to_route)
+            pl.add_io_pins_connected(self.pins_to_route)
+            #pl.add_io_pins(self.pins_to_route)
 
     def compute_bus_sizes(self):
         """ Compute the independent bus widths shared between two and four bank SRAMs """
@@ -1089,7 +1114,7 @@ class sram_1bank(design, verilog, lef):
         self.add_layout_pins()
 
         # Some technologies have an isolation
-        self.add_dnwell(inflate=2.5)
+        self.add_dnwell(inflate=2.5, add_vias=False)
 
         init_bbox = self.get_bbox()
         # Route the supplies together and/or to the ring/stripes.
@@ -1100,7 +1125,8 @@ class sram_1bank(design, verilog, lef):
             self.route_escape_pins(bbox=init_bbox, mod=mod, route_option=route_option)
 
         if OPTS.route_supplies:
-            self.route_supplies(init_bbox)
+            #self.route_supplies(init_bbox)
+            self.route_supplies_constructive(init_bbox)
 
     def route_dffs(self, add_routes=True):
 

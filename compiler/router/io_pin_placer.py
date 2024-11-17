@@ -412,7 +412,7 @@ class io_pin_placer(router):
                 return [source_pin.uc(), target_pin.bc()]
             else:
             # need intermediate point
-                via_basic_y = ll.y + 21 # 21 is magic number, make sure out of dff area
+                via_basic_y = ll.y + 22 # 22 is magic number, make sure out of dff area
                 if is_up:
                     via_basic_y = via_basic_y + 0.5
                 else:
