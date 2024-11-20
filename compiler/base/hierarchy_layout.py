@@ -1913,8 +1913,8 @@ class layout():
         # Just use the power pin function for now to save code
         self.add_power_pin(new_name, pin.center(), start_layer=start_layer, directions=directions)
 
-    def add_power_pin_no_via(self, name, loc, directions=None, start_layer="m1"):
-        # same function like normal one, but do not add via to the gird layer
+    def add_power_pin_m2(self, name, loc, directions=None, start_layer="m1"):
+        # same function like normal one, but add power pin at m2
         # Hack for min area
         if OPTS.tech_name == "sky130":
             min_area = drc["minarea_{}".format(self.pwr_grid_layers[1])]
@@ -1925,7 +1925,7 @@ class layout():
             height = None
 
         pin = None
-        if start_layer in self.pwr_grid_layers:
+        if start_layer == "m2":
             pin = self.add_layout_pin_rect_center(text=name,
                                                    layer=start_layer,
                                                    offset=loc,
@@ -1933,7 +1933,7 @@ class layout():
                                                    height=height)
         else:
             via = self.add_via_stack_center(from_layer=start_layer,
-                                            to_layer=start_layer,# so only enclosure shape will be added
+                                            to_layer="m2",
                                             offset=loc,
                                             directions=directions)
 
@@ -1942,7 +1942,7 @@ class layout():
             if not height:
                 height = via.height
             pin = self.add_layout_pin_rect_center(text=name,
-                                                  layer=start_layer,
+                                                  layer="m2",
                                                   offset=loc,
                                                   width=width,
                                                   height=height)
@@ -2063,7 +2063,7 @@ class layout():
                                                layer=layer,
                                                offset=peri_pin_loc)
 
-    def add_dnwell(self, bbox=None, inflate=1, add_vias=True):
+    def add_dnwell(self, bbox=None, inflate=1, route_option="classic"):
         """ Create a dnwell, along with nwell moat at border. """
 
         if "dnwell" not in tech_layer:
@@ -2108,9 +2108,9 @@ class layout():
         tap_spacing = 2
         nwell_offset = vector(self.nwell_width, self.nwell_width)
 
-        # Every nth tap is connected to gnd
+        # Every nth tap is connected to vdd
         period = 5
-
+        moat_pins = []
         # BOTTOM
         count = 0
         loc = ll + nwell_offset.scale(tap_spacing, 0)
@@ -2125,14 +2125,10 @@ class layout():
                                           to_layer="m1",
                                           offset=loc)
             else:
-                if add_vias:
-                    self.add_power_pin(name="vdd",
-                                       loc=loc,
-                                       start_layer="li")
-                else:
-                    self.add_power_pin_no_via(name="vdd",
-                                              loc=loc,
-                                              start_layer="li")
+                pin = self.add_power_pin(name="vdd",
+                                         loc=loc,
+                                         start_layer="li")
+                moat_pins.append(pin)
             count += 1
             loc += nwell_offset.scale(tap_spacing, 0)
 
@@ -2150,14 +2146,10 @@ class layout():
                                           to_layer="m1",
                                           offset=loc)
             else:
-                if add_vias:
-                    self.add_power_pin(name="vdd",
-                                       loc=loc,
-                                       start_layer="li")
-                else:
-                    self.add_power_pin_no_via(name="vdd",
-                                              loc=loc,
-                                              start_layer="li")
+                pin = self.add_power_pin(name="vdd",
+                                         loc=loc,
+                                         start_layer="li")
+                moat_pins.append(pin)
             count += 1
             loc += nwell_offset.scale(tap_spacing, 0)
 
@@ -2175,14 +2167,15 @@ class layout():
                                           to_layer="m2",
                                           offset=loc)
             else:
-                if add_vias:
-                    self.add_power_pin(name="vdd",
-                                       loc=loc,
-                                       start_layer="li")
-                else:
-                    self.add_power_pin_no_via(name="vdd",
-                                              loc=loc,
-                                              start_layer="li")                    
+                if route_option == "classic":
+                    pin = self.add_power_pin(name="vdd",
+                                             loc=loc,
+                                             start_layer="li")
+                elif route_option == "fast":
+                    pin = self.add_power_pin_m2(name="vdd",
+                                                loc=loc,
+                                                start_layer="li")  
+                moat_pins.append(pin)                  
             count += 1
             loc += nwell_offset.scale(0, tap_spacing)
 
@@ -2200,19 +2193,21 @@ class layout():
                                           to_layer="m2",
                                           offset=loc)
             else:
-                if add_vias:
-                    self.add_power_pin(name="vdd",
-                                       loc=loc,
-                                       start_layer="li")
-                else:
-                    self.add_power_pin_no_via(name="vdd",
-                                              loc=loc,
-                                              start_layer="li")
+                if route_option == "classic":
+                    pin = self.add_power_pin(name="vdd",
+                                             loc=loc,
+                                             start_layer="li")
+                elif route_option == "fast":
+                    pin = self.add_power_pin_m2(name="vdd",
+                                                loc=loc,
+                                                start_layer="li")
+                moat_pins.append(pin)
             count += 1
             loc += nwell_offset.scale(0, tap_spacing)
 
-        # Add the gnd ring
+        # Add the vdd ring
         self.add_ring([ll, ur])
+        return moat_pins
 
     def add_ring(self, bbox=None, width_mult=8, offset=0):
         """

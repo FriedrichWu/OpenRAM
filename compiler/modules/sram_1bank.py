@@ -53,8 +53,10 @@ class sram_1bank(design, verilog, lef):
         # delay control logic does not have RBLs
         self.has_rbl = OPTS.control_logic != "control_logic_delay"
 
-		# IO pins, except power, list of pin names
+        # IO pins, except power, list of pin names
         self.pins_to_route = []
+        # vdd pins on moat, list of pins
+        self.moat_pins = []
 
     def add_pins(self):
         """ Add pins for entire SRAM. """
@@ -248,6 +250,7 @@ class sram_1bank(design, verilog, lef):
         debug.error("Must override pure virtual function.", -1)
 
     def route_supplies_constructive(self, bbox=None):
+        """ Corresponding supply router for io_pin_placer """
         # prepare the "router"
         from openram.router.supply_placer import supply_placer as router
         rtr = router(layers=self.supply_stack,
@@ -255,22 +258,32 @@ class sram_1bank(design, verilog, lef):
                      bbox=bbox,
                      pin_type=OPTS.supply_pin_type,
                      ext_vdd_name=self.vdd_name,
-                     ext_gnd_name=self.gnd_name)
+                     ext_gnd_name=self.gnd_name,
+                     moat_pins=self.moat_pins)
+
         # add power rings / side pins
         if OPTS.supply_pin_type in ["top", "bottom", "right", "left"]:
-            rtr.add_side_pin(self.vdd_name)
-            rtr.add_side_pin(self.gnd_name)
+            rtr.add_side_pin("vdd")
+            rtr.add_side_pin("gnd")# noraml gnd name
         elif OPTS.supply_pin_type == "ring":
-            rtr.add_ring_pin(self.vdd_name)# ring vdd name
-            rtr.add_ring_pin(self.gnd_name)
+            rtr.add_ring_pin("vdd")
+            rtr.add_ring_pin("gnd")# normal gnd name
         else:
             debug.warning("Side supply pins aren't created.")
 
-        # maze router the bank power pins 
+        # Prepare the inside power pins (all power pins of submodules), at m3
         for pin_name in ["vdd", "gnd"]:
-            for inst in self.bank_insts:
+            for inst in self.insts:
                 self.copy_power_pins(inst, pin_name)
-        rtr.route_bank()
+        # Route all the power pins
+        #rtr.route_inside() # only connecting the power pins of inside submodules with each other, moat pins will connect to the ring
+        rtr.route_outside(io_pin_names=self.pins_to_route)
+        # route moat vdds
+        #rtr.route_moat(self.pins_to_route)
+        
+		# route to the outside
+        #rtr.prepare_escape_pins()
+
 
     def route_supplies(self, bbox=None):
         """ Route the supply grid and connect the pins to them. """
@@ -1114,7 +1127,7 @@ class sram_1bank(design, verilog, lef):
         self.add_layout_pins()
 
         # Some technologies have an isolation
-        self.add_dnwell(inflate=2.5, add_vias=False)
+        self.moat_pins = self.add_dnwell(inflate=2.5, route_option=route_option)
 
         init_bbox = self.get_bbox()
         # Route the supplies together and/or to the ring/stripes.

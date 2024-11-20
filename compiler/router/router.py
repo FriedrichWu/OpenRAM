@@ -112,10 +112,10 @@ class router(router_tech):
 
 
     def find_pins_inside(self, pin_name): 
-        # find pins except moat, power ring, the moat pins will be store as list and return
+        # find pins except moat, power ring, the moat pins will be store as set and return
         """ Find the pins with the given name. """
         debug.info(4, "Finding all pins for {}".format(pin_name))
-        moat_pins = []
+
         shape_list = self.layout.getAllPinShapes(str(pin_name))
         pin_set = set()
         for shape in shape_list:
@@ -130,7 +130,6 @@ class router(router_tech):
                 continue
             # skip the moat pin
             if self.check_pin_on_moat(new_pin):
-                moat_pins.append(new_pin)
                 continue
             # Merge previous pins into this one if possible
             self.merge_shapes(new_pin, pin_set)
@@ -138,7 +137,6 @@ class router(router_tech):
         # Add these pins to the 'pins' dict
         self.pins[pin_name] = pin_set
         self.all_pins.update(pin_set)
-        return moat_pins
 
 
     def check_pin_on_moat(self, pin_shape):
