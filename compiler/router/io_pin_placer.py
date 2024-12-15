@@ -395,12 +395,15 @@ class io_pin_placer(router):
                 return [source_pin.bc(), target_pin.uc()]
             else:
             # need intermediate point
-                via_basic_y = self.design.bank.height + 3 # 3 is magic number, make sure out of bank area
+                #via_basic_y = self.design.bank.height + 3 # 3 is magic number, make sure out of bank area
+                via_basic_y = self.design.bank_inst.uy() + 3 * self.design.m3_pitch
                 is_up = not is_up# Be attention, for channel at the top, the is_up should be inverted! Otherwise will cause overlap!
                 if is_up:
-                    via_basic_y = via_basic_y + 0.5
+                    #via_basic_y = via_basic_y + 0.5
+                    via_basic_y = via_basic_y + self.design.m3_pitch
                 else:
-                    via_basic_y = via_basic_y - 0.5
+                    #via_basic_y = via_basic_y - 0.5
+                    via_basic_y = via_basic_y - self.design.m3_pitch
                 point_1 = vector(source_pin.center().x, via_basic_y)
                 point_2 = vector(target_pin.center().x, via_basic_y)
                 return [source_pin.bc(), point_1, point_2, target_pin.uc()]
@@ -412,11 +415,14 @@ class io_pin_placer(router):
                 return [source_pin.uc(), target_pin.bc()]
             else:
             # need intermediate point
-                via_basic_y = ll.y + 22 # 22 is magic number, make sure out of dff area
+                #via_basic_y = ll.y + 22 # 22 is magic number, make sure out of dff area
+                via_basic_y = self.design.data_dff_insts[0].uy() + 3 * self.design.m3_pitch
                 if is_up:
-                    via_basic_y = via_basic_y + 0.5
+                    #via_basic_y = via_basic_y + 0.5
+                    via_basic_y = via_basic_y + self.design.m3_pitch
                 else:
-                    via_basic_y = via_basic_y - 0.5
+                    #via_basic_y = via_basic_y - 0.5
+                    via_basic_y = via_basic_y - self.design.m3_pitch
                 point_1 = vector(source_pin.center().x, via_basic_y)
                 point_2 = vector(target_pin.center().x, via_basic_y)
                 return [source_pin.uc(), point_1, point_2, target_pin.bc()]

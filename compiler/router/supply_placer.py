@@ -75,7 +75,7 @@ class supply_placer(router):
         selected_moat_pins = self.prepare_selected_moat_pins()
         # Route vdd and gnd
         routed_count = 0
-        routed_max = len(self.pins[vdd_name]) + len(self.pins[gnd_name])
+        routed_max = len(self.pins[vdd_name]) + len(self.pins[gnd_name]) + len(self.moat_pins) + len(self.new_pins["gnd"])
         for pin_name in [vdd_name, gnd_name]:
             if pin_name == gnd_name: # otherwise will not recognaize the moat blocakge
                 self.prepare_gds_reader()
@@ -206,7 +206,7 @@ class supply_placer(router):
                                        pin.ll(),
                                        pin.width(),
                                        pin.height())        
-            
+
 
     def prepare_selected_moat_pins(self):
         """ Selcet the possibe moat pins, feed into the MST, where will decide which of these pin should be connected to which pin """
@@ -254,57 +254,6 @@ class supply_placer(router):
             selected_moat_pins.extend(self.moat_pins_right)
             selected_moat_pins.extend(self.moat_pins_top)
             return selected_moat_pins
-
-
-    def prepare_escape_pins(self):
-        # clear all the inside "vdd " "gnd" at sram module level
-        # Copy the pin shape(s) to rectangles
-        for pin_name in ["vdd", "gnd"]:
-            # Copy the pin shape(s) to rectangles
-            for pin in self.design.get_pins(pin_name):
-                self.design.add_rect(pin.layer,
-                                     pin.ll(),
-                                     pin.width(),
-                                     pin.height())
-
-            # Remove the pin shape(s)
-            self.design.remove_layout_pin(pin_name)
-        
-        # prepare pins for every instances
-        for pin_name in ["vdd"]:
-            count =0
-            for pin in self.design.control_logic_insts[0].get_pins(pin_name):
-                debug.warning("vdd pin shape -> ll:{0} ur:{1}".format(pin.ll(), pin.ur()))
-                """
-                count = count + 1
-                new_pin = graph_shape("gnd", pin.rect, pin.layer)
-                source = new_pin
-                source_center_x = pin.center().x
-                target_ur_y = self.new_pins[self.ext_gnd_name][1].center().y + 0.5 * self.new_pins[self.ext_gnd_name][1].height()
-                ll = vector(source_center_x - 2.6 - 0.5 * self.track_wire, pin.center().y - 0.5 * self.track_wire)#target_ur_y - self.track_wire)
-                ur = vector(source_center_x - 2.6 + 0.5 * self.track_wire, pin.center().y + 0.5 * self.track_wire)#target_ur_y)
-                target = graph_shape("fake", [ll,ur], pin.layer)
-                # Create the graph
-                g = graph(self)
-                g.create_graph(source, target)
-                # Find the shortest path from source to target
-                path = g.find_shortest_path()
-                # If no path is found, throw an error
-                if path is None:
-                    self.write_debug_gds(gds_name="{}error.gds".format(OPTS.openram_temp), g=g, source=source, target=target)
-                    debug.error("Couldn't route from {} to {}.".format(source, target), -1)
-                # Create the path shapes on layout
-                new_wires, new_vias = self.add_path(path)
-                # Find the recently added shapes
-                self.find_blockages(pin_name, new_wires)
-                self.find_vias(new_vias)
-                """
-        debug.warning("vdd of wmask number -> {0}".format(count))
-        debug.warning("instance postion -> {0} {1}".format(self.design.control_logic_insts[0].lx(), self.design.control_logic_insts[0].by()))
-    
-        # print pins_all
-        for pin in self.all_pins:
-            debug.warning("all_pins -> {0}".format(pin))
 
 
     def check_overlap(self, moat_pin, io_pin_names): 
@@ -361,7 +310,7 @@ class supply_placer(router):
                 self.moat_pins_bottom.append(moat_pin_route) 
         elif edge == "top":
             add_distance = self.via2_via3_pitch # if shift, need to fulfill via2-via3 spacing, top/bottom only
-            pin_too_close = any(abs(io_pin.center().x - source_center.x) < self.track_width for io_pin in self.io_pins_top)
+            pin_too_close = any(abs(io_pin.center().x - source_center.x) < (self.track_width + 0.1) for io_pin in self.io_pins_top)
             tmp_center = vector(source_center.x, source_center.y)
             while pin_too_close:
                 tmp_center = vector(source_center.x, source_center.y)
@@ -370,7 +319,7 @@ class supply_placer(router):
                     tmp_center = vector((tmp_center.x + add_distance), tmp_center.y)
                 else: # left shift
                     tmp_center = vector((tmp_center.x - add_distance), tmp_center.y)
-                pin_too_close = any(abs(io_pin.center().x - tmp_center.x) < self.track_width for io_pin in self.io_pins_top)
+                pin_too_close = any(abs(io_pin.center().x - tmp_center.x) < (self.track_width + 0.1) for io_pin in self.io_pins_top)
                 direction = - direction
             # the nearst vdd ring
             vdd_ring = self.new_pins["vdd"][0] # order in list -> "top", "bottom", "right", "left"]
@@ -628,7 +577,7 @@ class supply_placer(router):
             return "right"
         return "top"
 
-       
+
     def find_closest_edge(self, pin):
         """ Use to find the edge, where the io pin locats """
 
@@ -796,7 +745,7 @@ class supply_placer(router):
         # Prepare the pins that are allowed to connect to the moat pins. 
         # Specical handle gnd ring
         candidate_pins = []
-        max_distance = 13
+        max_distance = 20#13
         if pin_name == "gnd":
             ring_pins = []
             ring_pins = self.new_pins[pin_name]

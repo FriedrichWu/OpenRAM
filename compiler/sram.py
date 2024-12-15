@@ -114,7 +114,21 @@ class sram():
                         break
         elif self.route_option == "fast":
             if not OPTS.netlist_only:
-                self.s.create_layout(route_option=route_option)
+                i = 0
+                while i < 10:
+                    debug.warning("current i: i = {0}".format(i))
+                    try:
+                        self.s.create_layout(position_add=i, route_option=route_option)
+                    except AssertionError as e:
+                        i = i + 1
+                        if i == 9: #failed in routing
+                            debug.error("Failed in routing", -1)
+                            break
+                        del self.s
+                        self.s = sram(name, sram_config)
+                        self.s.create_netlist()
+                        continue
+                    break
 
         if not OPTS.is_unit_test:
             print_time("SRAM creation", datetime.datetime.now(), start_time)

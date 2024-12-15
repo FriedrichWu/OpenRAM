@@ -280,10 +280,6 @@ class sram_1bank(design, verilog, lef):
         rtr.route_outside(io_pin_names=self.pins_to_route)
         # route moat vdds
         #rtr.route_moat(self.pins_to_route)
-        
-		# route to the outside
-        #rtr.prepare_escape_pins()
-
 
     def route_supplies(self, bbox=None):
         """ Route the supply grid and connect the pins to them. """
@@ -916,7 +912,6 @@ class sram_1bank(design, verilog, lef):
         x_offset = self.control_logic_insts[port].rx() - self.row_addr_dff_insts[port].width
         # It is above the control logic and the predecoder array
         y_offset = max(self.control_logic_insts[port].uy(), self.bank.predecoder_top)
-        y_offset = y_offset + 0.4 # fix, maigc number
         self.row_addr_pos[port] = vector(x_offset, y_offset)
         self.row_addr_dff_insts[port].place(self.row_addr_pos[port])
 
@@ -925,7 +920,7 @@ class sram_1bank(design, verilog, lef):
             # The row address bits are placed above the control logic aligned on the left.
             x_offset = self.control_pos[port].x - self.control_logic_insts[port].width + self.row_addr_dff_insts[port].width
             # If it can be placed above the predecoder and below the control logic, do it
-            y_offset = min(self.control_logic_insts[port].by(), self.bank.predecoder_top)
+            y_offset = min(self.control_logic_insts[port].by(), self.bank.predecoder_bottom)
             self.row_addr_pos[port] = vector(x_offset, y_offset)
             self.row_addr_dff_insts[port].place(self.row_addr_pos[port], mirror="XY")
 
@@ -1138,8 +1133,10 @@ class sram_1bank(design, verilog, lef):
             self.route_escape_pins(bbox=init_bbox, mod=mod, route_option=route_option)
 
         if OPTS.route_supplies:
-            #self.route_supplies(init_bbox)
-            self.route_supplies_constructive(init_bbox)
+            if route_option == "classic":
+                self.route_supplies(init_bbox)
+            else: # fast
+                self.route_supplies_constructive(init_bbox)
 
     def route_dffs(self, add_routes=True):
 
@@ -1175,7 +1172,7 @@ class sram_1bank(design, verilog, lef):
 
             if port == 0:
                 offset = vector(self.control_logic_insts[port].rx() + self.dff.width,
-                                - self.data_bus_size[port] + 2 * self.m3_pitch)
+                                self.bank_inst.by() - self.col_addr_size * self.m3_pitch)# higher offset to avoid possible overlap with data dffs channel routing
                 cr = channel_route(netlist=route_map,
                                    offset=offset,
                                    layer_stack=layer_stack,
@@ -1228,17 +1225,11 @@ class sram_1bank(design, verilog, lef):
             route_map.extend(list(zip(bank_pins, dff_pins)))
 
         if len(route_map) > 0:
-
             # This layer stack must be different than the column addr dff layer stack
             layer_stack = self.m2_stack
             if port == 0:
-                # This is relative to the bank at 0,0 or the s_en which is routed on M3 also
-                if "s_en" in self.control_logic_insts[port].mod.pin_map:
-                    y_bottom = min(0, self.control_logic_insts[port].get_pin("s_en").by())
-                else:
-                    y_bottom = 0
-
-                y_offset = y_bottom - self.data_bus_size[port] + 2 * self.m3_pitch
+                # for port 0, the offset of first track in channel router is fixed
+                y_offset = self.data_dff_insts[port].uy() + 6 * self.m3_pitch
                 offset = vector(self.control_logic_insts[port].rx() + self.dff.width,
                                 y_offset)
                 cr = channel_route(netlist=route_map,
@@ -1253,13 +1244,77 @@ class sram_1bank(design, verilog, lef):
                     self.connect_inst([])
                     # self.add_flat_inst(cr.name, cr)
                 else:
-                    self.data_bus_size[port] = max(cr.height, self.col_addr_bus_size[port]) + self.data_bus_gap
+                    # return the real channel width that min. should be
+                    # the bottom of w_en or s_en
+                    if ("s_en" in self.control_logic_insts[port].mod.pin_map) and ("w_en" in self.control_logic_insts[port].mod.pin_map):# rw
+                        y_bottom = min(0, self.control_logic_insts[port].get_pin("s_en").by(), self.control_logic_insts[port].get_pin("w_en").by())
+                    elif "w_en" in self.control_logic_insts[port].mod.pin_map:# w
+                        y_bottom = min(0, self.control_logic_insts[port].get_pin("w_en").by())
+                    else:
+                        y_bottom = 0
+
+                    if len(self.all_ports) == 1: # only 1 port at bottom
+                        extra_offset = 6 * self.m3_pitch + (self.bank_inst.by() - (y_bottom - self.m4_nonpref_pitch))
+                    else: # 2 ports, row address decoder needs to be considered
+                        # for port 0
+                        # determine the most right dffs
+                        if self.num_spare_cols: # if we have spare regs
+                            dff_right_x = self.spare_wen_dff_insts[0].rx()
+                        else: # data dffs
+                            dff_right_x = self.data_dff_insts[0].rx()
+                        # check if row address dffs are overlaped with dff area, bank position as reference
+                        if self.bank_inst.rx() < (dff_right_x + 2 * self.m4_pitch):
+                            debug.warning("m4 pitch ----> {0}".format(self.m4_pitch)) 
+                            debug.warning("m3 pitch ----> {0}".format(self.m3_pitch))
+                            debug.warning("m4_non_pref pitch ----> {0}".format(self.m4_nonpref_pitch))
+                            debug.warning("lower row addr dff: {0}".format(self.row_addr_dff_insts[1].by()))
+                            debug.warning("higher row addr dff: {0}".format(self.row_addr_dff_insts[1].uy()))
+                            # check the most lower one betwenn control signal and address dff
+                            if y_bottom < self.row_addr_dff_insts[1].by():
+                                y_bottom_most = y_bottom
+                            else:
+                                y_bottom_most = self.row_addr_dff_insts[1].by()         
+                            # the upper track should below the lower one
+                            extra_offset = 6 * self.m3_pitch + (self.bank_inst.by() - (y_bottom_most - self.m4_nonpref_pitch))
+                        else: # do not need take care of address dff 1, since it's far away
+                            extra_offset = 6 * self.m3_pitch + (self.bank_inst.by() - (y_bottom - self.m4_nonpref_pitch))
+                    debug.warning("extra_offset->{0}".format(extra_offset))
+                    debug.warning("channel_height->{0}".format(cr.height))
+                    debug.warning("self.col_addr_bus_size->{0}".format(self.col_addr_bus_size[port]))
+                    debug.warning("self.databusgap->{0}".format(self.data_bus_gap))
+                    self.data_bus_size[port] = max((cr.height + extra_offset), self.col_addr_bus_size[port]) + self.data_bus_gap
             else:
-                if "s_en" in self.control_logic_insts[port].mod.pin_map:
-                    y_top = max(self.bank.height, self.control_logic_insts[port].get_pin("s_en").uy())
+                # for port1, the offset of first track in channel router needs to check first, make sure no overlap with control signal & address dff
+                if ("s_en" in self.control_logic_insts[port].mod.pin_map) and ("w_en" in self.control_logic_insts[port].mod.pin_map):
+                    y_top = max(self.bank.height, self.control_logic_insts[port].get_pin("s_en").uy(), self.control_logic_insts[port].get_pin("w_en").uy())
+                    y_offset = y_top + 6 * self.m3_pitch
+                elif "w_en" in self.control_logic_insts[port].mod.pin_map:
+                    y_top = max(self.bank.height, self.control_logic_insts[port].get_pin("w_en").uy())
+                    y_offset = y_top + self.m3_pitch# it's fine, since w port doesn't have dout signals
                 else:
                     y_top = self.bank.height
-                y_offset = y_top + self.m3_pitch
+                    y_offset = y_top + 6 * self.m3_pitch
+                # check the offset overlap with address dff 0 or not
+                if self.num_spare_cols: # if we have spare regs
+                    dff_left_x = self.spare_wen_dff_insts[1].lx()
+                else: # data dffs
+                    dff_left_x = self.data_dff_insts[1].lx()
+                # check if row address dffs are overlaped with dff area
+                if self.bank_inst.lx() > (dff_left_x - 2 * self.m4_pitch):
+                    debug.warning("m4 pitch ----> {0}".format(self.m4_pitch)) 
+                    debug.warning("m3 pitch ----> {0}".format(self.m3_pitch))
+                    debug.warning("m4_non_pref pitch ----> {0}".format(self.m4_nonpref_pitch))
+                    # the bottom track should also above row address decoder
+                    if y_offset > self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch:
+                        # do not need change since first track is high enough
+                        extra_offset = y_offset - self.bank.height # height could be use since bank at 0,0
+                    else: # make it higher tham row address decoder
+                        extra_offset = self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch - self.bank_inst.height 
+                        # update the new y_offset
+                        y_offset = self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch
+                else: # do not need to take care address dff0, since it's far away
+                    extra_offset = y_offset - self.bank.height # height could be use since bank at 0,0
+
                 offset = vector(0,
                                 y_offset)
                 cr = channel_route(netlist=route_map,
@@ -1274,7 +1329,10 @@ class sram_1bank(design, verilog, lef):
                     self.connect_inst([])
                     # self.add_flat_inst(cr.name, cr)
                 else:
-                    self.data_bus_size[port] = max(cr.height, self.col_addr_bus_size[port]) + self.data_bus_gap
+                    # return the real channel width that min. should be
+                    # 2 ports, row address decoder needs to be considered
+                    # for port 1
+                    self.data_bus_size[port] = max((cr.height + extra_offset), self.col_addr_bus_size[port]) + self.data_bus_gap
 
     def route_clk(self):
         """ Route the clock network """

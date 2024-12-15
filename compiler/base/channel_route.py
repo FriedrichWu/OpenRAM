@@ -233,19 +233,10 @@ class channel_route(design):
             real_channel_offset = vector(self.offset.x, min(self.min_value, self.offset.y))
         else:
             real_channel_offset = vector(min(self.min_value, self.offset.x), self.offset.y)
-
-        if self.dff_area == False:
-            current_offset = real_channel_offset
-        else: # special handle for dff area
-            current_offset = vector(real_channel_offset.x, real_channel_offset.y + 5) # make route out of dffs area
-
+        current_offset = real_channel_offset
+        if self.dff_area == True:
             if self.layer_stack == self.m2_stack:
                 self.vertical_nonpref_pitch = self.horizontal_pitch + 0.1 # 0.1 make sure even if via at same col, fulfill m3-m3 spacing
-
-            if self.layer_stack == self.m1_stack:
-                current_offset = vector(real_channel_offset.x, current_offset.y + 14) # make sure no overlap between col_dffs & data_dffs
-                if real_channel_offset.y > 0: # which means this is channnel router for coldff at the top
-                    current_offset = real_channel_offset # no offset to avoid overlap problem at the top
         # Sort nets by left edge value
         nets.sort()
         while len(nets) > 0:
