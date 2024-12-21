@@ -20,7 +20,7 @@ class sram():
     results.
     We can later add visualizer and other high-level functions as needed.
     """
-    def __init__(self, sram_config=None, name=None, route_option="classic"):
+    def __init__(self, sram_config=None, name=None):
 
         # Create default configs if custom config isn't provided
         if sram_config is None:
@@ -48,7 +48,6 @@ class sram():
         start_time = datetime.datetime.now()
 
         self.name = name
-        self.route_option = route_option # "classic" or "fast"
 
         from openram.modules.sram_1bank import sram_1bank as sram
 
@@ -57,7 +56,7 @@ class sram():
         self.s.create_netlist()# not placed & routed jet
 
         # choose the routung method, maze router or constructive
-        if self.route_option == "classic":
+        if OPTS.route_approach == "classic":
             cur_state = "IDLE"
             if not OPTS.netlist_only:
                 i = 0
@@ -112,13 +111,13 @@ class sram():
                     else:
                         cur_state = "FINISH"
                         break
-        elif self.route_option == "fast":
+        elif OPTS.route_approach == "quality":
             if not OPTS.netlist_only:
                 i = 0
                 while i < 10:
                     debug.warning("current i: i = {0}".format(i))
                     try:
-                        self.s.create_layout(position_add=i, route_option=route_option)
+                        self.s.create_layout(position_add=i, route_option="quality")
                     except AssertionError as e:
                         i = i + 1
                         if i == 9: #failed in routing

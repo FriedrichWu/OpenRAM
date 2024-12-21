@@ -408,7 +408,7 @@ class sram_1bank(design, verilog, lef):
                         design=self,
                         mod=mod)
             rtr.route(self.pins_to_route)
-        elif route_option == "fast":
+        elif route_option == "quality":
             # use io_pin_placer
             # put the IO pins at the edge
             from openram.router.io_pin_placer import io_pin_placer as placer
@@ -1135,7 +1135,7 @@ class sram_1bank(design, verilog, lef):
         if OPTS.route_supplies:
             if route_option == "classic":
                 self.route_supplies(init_bbox)
-            else: # fast
+            else: # quality
                 self.route_supplies_constructive(init_bbox)
 
     def route_dffs(self, add_routes=True):
