@@ -1135,7 +1135,7 @@ class sram_1bank(design, verilog, lef):
         if OPTS.route_supplies:
             if route_option == "classic":
                 self.route_supplies(init_bbox)
-            else: # quality
+            elif route_option == "quality": # quality
                 self.route_supplies_constructive(init_bbox)
 
     def route_dffs(self, add_routes=True):
@@ -1264,7 +1264,7 @@ class sram_1bank(design, verilog, lef):
                             dff_right_x = self.data_dff_insts[0].rx()
                         # check if row address dffs are overlaped with dff area, bank position as reference
                         if self.bank_inst.rx() < (dff_right_x + 2 * self.m4_pitch):
-                            debug.warning("m4 pitch ----> {0}".format(self.m4_pitch)) 
+                            debug.warning("m4 pitch ----> {0}".format(self.m4_pitch))
                             debug.warning("m3 pitch ----> {0}".format(self.m3_pitch))
                             debug.warning("m4_non_pref pitch ----> {0}".format(self.m4_nonpref_pitch))
                             debug.warning("lower row addr dff: {0}".format(self.row_addr_dff_insts[1].by()))
@@ -1273,7 +1273,7 @@ class sram_1bank(design, verilog, lef):
                             if y_bottom < self.row_addr_dff_insts[1].by():
                                 y_bottom_most = y_bottom
                             else:
-                                y_bottom_most = self.row_addr_dff_insts[1].by()         
+                                y_bottom_most = self.row_addr_dff_insts[1].by()
                             # the upper track should below the lower one
                             extra_offset = 6 * self.m3_pitch + (self.bank_inst.by() - (y_bottom_most - self.m4_nonpref_pitch))
                         else: # do not need take care of address dff 1, since it's far away
@@ -1301,7 +1301,7 @@ class sram_1bank(design, verilog, lef):
                     dff_left_x = self.data_dff_insts[1].lx()
                 # check if row address dffs are overlaped with dff area
                 if self.bank_inst.lx() > (dff_left_x - 2 * self.m4_pitch):
-                    debug.warning("m4 pitch ----> {0}".format(self.m4_pitch)) 
+                    debug.warning("m4 pitch ----> {0}".format(self.m4_pitch))
                     debug.warning("m3 pitch ----> {0}".format(self.m3_pitch))
                     debug.warning("m4_non_pref pitch ----> {0}".format(self.m4_nonpref_pitch))
                     # the bottom track should also above row address decoder
@@ -1309,7 +1309,7 @@ class sram_1bank(design, verilog, lef):
                         # do not need change since first track is high enough
                         extra_offset = y_offset - self.bank.height # height could be use since bank at 0,0
                     else: # make it higher tham row address decoder
-                        extra_offset = self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch - self.bank_inst.height 
+                        extra_offset = self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch - self.bank_inst.height
                         # update the new y_offset
                         y_offset = self.row_addr_dff_insts[0].uy() + self.m4_nonpref_pitch
                 else: # do not need to take care address dff0, since it's far away

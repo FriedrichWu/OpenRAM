@@ -107,7 +107,7 @@ class supply_placer(router):
                 # Report routed count
                 routed_count += 1
                 debug.info(2, "Routed {} of {} supply pins".format(routed_count, routed_max))
-        # finsih        
+        # finsih
         self.replace_layout_pins()
 
 
@@ -163,14 +163,14 @@ class supply_placer(router):
                 # Report routed count
                 routed_count += 1
                 debug.info(2, "Routed {} of {} supply pins".format(routed_count, routed_max))
-        # finsih        
+        # finsih
         self.replace_layout_pins()
 
 
     def route_moat(self, io_pin_names):
         # route the vdd pins at the moat
         # io_pin_names is a list
-        # the moat vdd shape will also be created and stored in the list 
+        # the moat vdd shape will also be created and stored in the list
         for moat_pin in self.moat_pins:
             self.check_overlap(moat_pin, io_pin_names)
 
@@ -188,7 +188,7 @@ class supply_placer(router):
 
             # Remove the pin shape(s)
             self.design.remove_layout_pin(pin_name)
-        
+
         # Get new pins, change the name of ring to extern supply name
         # vccd1 ring
         pins = self.get_new_pins("vdd")
@@ -205,7 +205,7 @@ class supply_placer(router):
                                        pin.layer,
                                        pin.ll(),
                                        pin.width(),
-                                       pin.height())        
+                                       pin.height())
 
 
     def prepare_selected_moat_pins(self):
@@ -236,7 +236,7 @@ class supply_placer(router):
             selected_moat_pins.extend(filtered_moat_pins_right)
             selected_moat_pins.extend(self.moat_pins_top)
             return selected_moat_pins
-            
+
         else: # only 1 port
             # in order to save runtime
             # top    -> moat pins all
@@ -256,7 +256,7 @@ class supply_placer(router):
             return selected_moat_pins
 
 
-    def check_overlap(self, moat_pin, io_pin_names): 
+    def check_overlap(self, moat_pin, io_pin_names):
         # use all the IO pins(at correspoding edge) to check overlap, check 1 moat vdd pin, give the corresponding target/source position as list, and connect them
         add_distance = 0
         direction = 1
@@ -281,7 +281,7 @@ class supply_placer(router):
             vdd_ring = self.new_pins["vdd"][1] # order in list -> "top", "bottom", "right", "left"]
             # bottom ring's y position at it's top
             target_egde_y = vdd_ring.center().y + 0.5 * vdd_ring.height()
-            if tmp_center == source_center: # no overlap 
+            if tmp_center == source_center: # no overlap
                 # no jog, direct return the source/target center position
                 # the target center position, should consider enought space for via
                 target_point = vector(tmp_center.x, (target_egde_y - 0.5 * self.track_wire))
@@ -292,13 +292,13 @@ class supply_placer(router):
                 ll = vector(source_point.x - 0.5 * self.track_wire, source_point.y - 0.5 * self.track_wire)
                 ur = vector(source_point.x + 0.5 * self.track_wire, source_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m4") 
-                self.moat_pins_bottom.append(moat_pin_route) 
+                moat_pin_route = graph_shape("vdd", rect, "m4")
+                self.moat_pins_bottom.append(moat_pin_route)
             else: # need jog
                 # shift the center
                 # add rectangle at same layer (original)
-                intermediate_point = vector(tmp_center.x, tmp_center.y) 
-                source_point = vector(source_center.x, source_center.y) 
+                intermediate_point = vector(tmp_center.x, tmp_center.y)
+                source_point = vector(source_center.x, source_center.y)
                 target_point = vector(tmp_center.x, (target_egde_y - 0.5 * self.track_wire))
                 point_list = [source_point, intermediate_point, target_point]
                 self.add_wire(point_list, vertical=True)
@@ -306,8 +306,8 @@ class supply_placer(router):
                 ll = vector(intermediate_point.x - 0.5 * self.track_wire, intermediate_point.y - 0.5 * self.track_wire)
                 ur = vector(intermediate_point.x + 0.5 * self.track_wire, intermediate_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m4") 
-                self.moat_pins_bottom.append(moat_pin_route) 
+                moat_pin_route = graph_shape("vdd", rect, "m4")
+                self.moat_pins_bottom.append(moat_pin_route)
         elif edge == "top":
             add_distance = self.via2_via3_pitch # if shift, need to fulfill via2-via3 spacing, top/bottom only
             pin_too_close = any(abs(io_pin.center().x - source_center.x) < (self.track_width + 0.1) for io_pin in self.io_pins_top)
@@ -325,7 +325,7 @@ class supply_placer(router):
             vdd_ring = self.new_pins["vdd"][0] # order in list -> "top", "bottom", "right", "left"]
             # top ring's y position at it's bottom
             target_egde_y = vdd_ring.center().y - 0.5 * vdd_ring.height()
-            if tmp_center == source_center: # no overlap 
+            if tmp_center == source_center: # no overlap
                 # no jog, direct return the source/target center position
                 # the target center position, should consider enought space for via
                 target_point = vector(tmp_center.x, (target_egde_y + 0.5 * self.track_wire))
@@ -336,13 +336,13 @@ class supply_placer(router):
                 ll = vector(source_point.x - 0.5 * self.track_wire, source_point.y - 0.5 * self.track_wire)
                 ur = vector(source_point.x + 0.5 * self.track_wire, source_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m4") 
-                self.moat_pins_top.append(moat_pin_route) 
+                moat_pin_route = graph_shape("vdd", rect, "m4")
+                self.moat_pins_top.append(moat_pin_route)
             else: # need jog
                 # shift the center
                 # add rectangle at same layer (original)
-                intermediate_point = vector(tmp_center.x, tmp_center.y) 
-                source_point = vector(source_center.x, source_center.y) 
+                intermediate_point = vector(tmp_center.x, tmp_center.y)
+                source_point = vector(source_center.x, source_center.y)
                 target_point = vector(tmp_center.x, (target_egde_y + 0.5 * self.track_wire))
                 point_list = [source_point, intermediate_point, target_point]
                 self.add_wire(point_list, vertical=True)
@@ -350,8 +350,8 @@ class supply_placer(router):
                 ll = vector(intermediate_point.x - 0.5 * self.track_wire, intermediate_point.y - 0.5 * self.track_wire)
                 ur = vector(intermediate_point.x + 0.5 * self.track_wire, intermediate_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m4") 
-                self.moat_pins_top.append(moat_pin_route)         
+                moat_pin_route = graph_shape("vdd", rect, "m4")
+                self.moat_pins_top.append(moat_pin_route)
         elif edge == "left":
             pin_too_close = any(abs(io_pin.center().y - source_center.y) < self.track_width for io_pin in self.io_pins_left)
             tmp_center = vector(source_center.x, source_center.y)
@@ -368,7 +368,7 @@ class supply_placer(router):
             vdd_ring = self.new_pins["vdd"][3] # order in list -> "top", "bottom", "right", "left"]
             # left ring's x position at it's right
             target_egde_x = vdd_ring.center().x + 0.5 * vdd_ring.width()
-            if tmp_center == source_center: # no overlap 
+            if tmp_center == source_center: # no overlap
                 # no jog, direct return the source/target center position
                 # the target center position, should consider enought space for via
                 target_point = vector((target_egde_x - 0.5 * self.track_wire), tmp_center.y)
@@ -379,13 +379,13 @@ class supply_placer(router):
                 ll = vector(source_point.x - 0.5 * self.track_wire, source_point.y - 0.5 * self.track_wire)
                 ur = vector(source_point.x + 0.5 * self.track_wire, source_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m3") 
+                moat_pin_route = graph_shape("vdd", rect, "m3")
                 self.moat_pins_left.append(moat_pin_route)
             else: # need jog
                 # shift the center
                 # add rectangle at same layer (original)
-                intermediate_point = vector(tmp_center.x, tmp_center.y) 
-                source_point = vector(source_center.x, source_center.y) 
+                intermediate_point = vector(tmp_center.x, tmp_center.y)
+                source_point = vector(source_center.x, source_center.y)
                 target_point = vector((target_egde_x - 0.5 * self.track_wire), tmp_center.y)
                 point_list = [source_point, intermediate_point, target_point]
                 self.add_wire(point_list, vertical=False)
@@ -393,7 +393,7 @@ class supply_placer(router):
                 ll = vector(intermediate_point.x - 0.5 * self.track_wire, intermediate_point.y - 0.5 * self.track_wire)
                 ur = vector(intermediate_point.x + 0.5 * self.track_wire, intermediate_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m3") 
+                moat_pin_route = graph_shape("vdd", rect, "m3")
                 self.moat_pins_left.append(moat_pin_route)
         else: #right
             pin_too_close = any(abs(io_pin.center().y - source_center.y) < self.track_width for io_pin in self.io_pins_right)
@@ -411,7 +411,7 @@ class supply_placer(router):
             vdd_ring = self.new_pins["vdd"][2] # order in list -> "top", "bottom", "right", "left"]
             # right ring's y position at it's left
             target_egde_x = vdd_ring.center().x - 0.5 * vdd_ring.width()
-            if tmp_center == source_center: # no overlap 
+            if tmp_center == source_center: # no overlap
                 # no jog, direct return the source/target center position
                 # the target center position, should consider enought space for via
                 target_point = vector((target_egde_x + 0.5 * self.track_wire), tmp_center.y)
@@ -422,13 +422,13 @@ class supply_placer(router):
                 ll = vector(source_point.x - 0.5 * self.track_wire, source_point.y - 0.5 * self.track_wire)
                 ur = vector(source_point.x + 0.5 * self.track_wire, source_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m3") 
-                self.moat_pins_right.append(moat_pin_route) 
+                moat_pin_route = graph_shape("vdd", rect, "m3")
+                self.moat_pins_right.append(moat_pin_route)
             else: # need jog
                 # shift the center
                 # add rectangle at same layer (original)
-                intermediate_point = vector(tmp_center.x, tmp_center.y) 
-                source_point = vector(source_center.x, source_center.y) 
+                intermediate_point = vector(tmp_center.x, tmp_center.y)
+                source_point = vector(source_center.x, source_center.y)
                 target_point = vector((target_egde_x + 0.5 * self.track_wire) ,tmp_center.y)
                 point_list = [source_point, intermediate_point, target_point]
                 self.add_wire(point_list, vertical=False)
@@ -436,15 +436,15 @@ class supply_placer(router):
                 ll = vector(intermediate_point.x - 0.5 * self.track_wire, intermediate_point.y - 0.5 * self.track_wire)
                 ur = vector(intermediate_point.x + 0.5 * self.track_wire, intermediate_point.y + 0.5 * self.track_wire)
                 rect = [ll, ur]
-                moat_pin_route = graph_shape("vdd", rect, "m3") 
-                self.moat_pins_right.append(moat_pin_route) 
+                moat_pin_route = graph_shape("vdd", rect, "m3")
+                self.moat_pins_right.append(moat_pin_route)
 
 
     def add_wire(self, point_list, vertical=False):
         if vertical == True: # m4 line, need start via3(m3 -> m4), end via3(m3 -> m4)
             if len(point_list) == 2: # direct connect
                 # start via
-                self.add_via(point=point_list[0], 
+                self.add_via(point=point_list[0],
                              from_layer="m3",
                              to_layer="m4")
                 self.add_via(point=point_list[0],
@@ -484,10 +484,10 @@ class supply_placer(router):
                 self.add_via(point=point_list[2],
                              from_layer="m4",
                              to_layer="m4") # shape
-        else: # m3 line, need start via2(m2 -> m3), end via3(m3 -> m4) 
+        else: # m3 line, need start via2(m2 -> m3), end via3(m3 -> m4)
             if len(point_list) == 2: # direct connect
                 # start via
-                self.add_via(point=point_list[0], 
+                self.add_via(point=point_list[0],
                              from_layer="m2",
                              to_layer="m3")
                 self.add_via(point=point_list[0],
@@ -500,11 +500,11 @@ class supply_placer(router):
                 # end via
                 self.add_via(point=point_list[1],
                              from_layer="m3",
-                             to_layer="m4")  
+                             to_layer="m4")
                 self.add_via(point=point_list[1],
                              from_layer="m3",
                              to_layer="m3") # shape
-            elif len(point_list) == 3: # need intermediate point 
+            elif len(point_list) == 3: # need intermediate point
                 # jog
                 self.add_line(point_1=point_list[0],
                               point_2=point_list[1],
@@ -537,9 +537,9 @@ class supply_placer(router):
         # via could be via2(m2 -> m3), via3(m3 -> m4)
         # or a shape at same layer
         if from_layer == to_layer:
-            self.design.add_rect_center(layer=from_layer, 
-                                        offset=point, 
-                                        width=self.track_wire, 
+            self.design.add_rect_center(layer=from_layer,
+                                        offset=point,
+                                        width=self.track_wire,
                                         height=self.track_wire)
         else:
             self.design.add_via_stack_center(from_layer=from_layer,
@@ -598,7 +598,7 @@ class supply_placer(router):
         elif min_diff == ur_diff_x:
             self.io_pins_right.append(pin)
         else:
-            self.io_pins_top.append(pin)        
+            self.io_pins_top.append(pin)
 
 
     def add_side_pin(self, pin_name, side, num_vias=3, num_fake_pins=4):
@@ -742,7 +742,7 @@ class supply_placer(router):
         """
         Extend the MST logic to connect internal pins to the nearest external ring pins.
         """
-        # Prepare the pins that are allowed to connect to the moat pins. 
+        # Prepare the pins that are allowed to connect to the moat pins.
         # Specical handle gnd ring
         candidate_pins = []
         max_distance = 20#13
@@ -755,7 +755,7 @@ class supply_placer(router):
                 if max_distance is None or dist <= max_distance:
                     candidate_pins.append(pin)
                     break
-        
+
         # Compute the MST for internal pins
         mst_pairs = self.get_mst_pairs(pins)
 
@@ -780,7 +780,7 @@ class supply_placer(router):
                 internal_to_ring_pairs.append((pin, nearest_ring_pin))
                 # Mark the ring pin as used if the pin is VDD
                 if pin_name == "vdd":
-                    used_ring_pins.add(nearest_ring_pin)                
+                    used_ring_pins.add(nearest_ring_pin)
 
         # Combine internal MST pairs and external connections
         full_connections = mst_pairs + internal_to_ring_pairs

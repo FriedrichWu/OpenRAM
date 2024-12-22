@@ -111,7 +111,7 @@ class router(router_tech):
         self.all_pins.update(pin_set)
 
 
-    def find_pins_inside(self, pin_name): 
+    def find_pins_inside(self, pin_name):
         # find pins except moat, power ring, the moat pins will be store as set and return
         """ Find the pins with the given name. """
         debug.info(4, "Finding all pins for {}".format(pin_name))

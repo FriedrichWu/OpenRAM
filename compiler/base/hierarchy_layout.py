@@ -1947,7 +1947,7 @@ class layout():
                                                   width=width,
                                                   height=height)
 
-        return pin        
+        return pin
 
     def add_power_pin(self, name, loc, directions=None, start_layer="m1"):
         # Hack for min area
@@ -2087,12 +2087,12 @@ class layout():
 
         # Hack for sky130 klayout drc rule nwell.6
         if OPTS.tech_name == "sky130":
-            # Apply the drc rule 
+            # Apply the drc rule
             # Add the dnwell
             self.add_rect("dnwell",
                           offset=ll - vector(0.5 * self.nwell_width, 0.5 * self.nwell_width) - vector(drc["minclosure_nwell_by_dnwell"], drc["minclosure_nwell_by_dnwell"]),
                           height=ur.y - ll.y + self.nwell_width + 2 * drc["minclosure_nwell_by_dnwell"],
-                          width=ur.x - ll.x + self.nwell_width + 2 * drc["minclosure_nwell_by_dnwell"])        
+                          width=ur.x - ll.x + self.nwell_width + 2 * drc["minclosure_nwell_by_dnwell"])
         else: # other tech
             # Add the dnwell
             self.add_rect("dnwell",
@@ -2171,11 +2171,11 @@ class layout():
                     pin = self.add_power_pin(name="vdd",
                                              loc=loc,
                                              start_layer="li")
-                elif route_option == "fast":
+                elif route_option == "quality":
                     pin = self.add_power_pin_m2(name="vdd",
                                                 loc=loc,
-                                                start_layer="li")  
-                moat_pins.append(pin)                  
+                                                start_layer="li")
+                moat_pins.append(pin)
             count += 1
             loc += nwell_offset.scale(0, tap_spacing)
 
@@ -2197,7 +2197,7 @@ class layout():
                     pin = self.add_power_pin(name="vdd",
                                              loc=loc,
                                              start_layer="li")
-                elif route_option == "fast":
+                elif route_option == "quality":
                     pin = self.add_power_pin_m2(name="vdd",
                                                 loc=loc,
                                                 start_layer="li")
