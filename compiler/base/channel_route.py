@@ -12,7 +12,7 @@ from openram import debug
 from openram.tech import drc
 from .vector import vector
 from .design import design
-
+from openram import OPTS
 
 class channel_net():
     def __init__(self, net_name, pins, vertical):
@@ -326,13 +326,24 @@ class channel_route(design):
         max_x = max([pin.center().x for pin in pins])
         min_x = min([pin.center().x for pin in pins])
         min_y = min([pin.center().y for pin in pins])
+        max_y = max([pin.center().y for pin in pins])
         # see the channel is at top or bottom
-        if min_y < 0: # port0, min_x need to change
-           min_x = min_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
-           port = 0
-        else: # port1, max_x need to change
-           max_x = max_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
-           port = 1
+        if min_y < 0: # port0
+            for pin in pins:
+                if pin.center().x == max_x:
+                    if pin.center().y == max_y:
+                        min_x = min_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
+                    else: # pin has max_x is under track
+                        max_x = max_x - 0.1
+            port = 0
+        else: # port1
+            for pin in pins:
+                if pin.center().x == max_x:
+                    if pin.center().y == max_y:
+                        max_x = max_x - 0.1 # in order to add jog at the dff pins, avoid overlap with vdd pins, left shift vertical line at dout pin
+                    else: # pin has max_x is under track
+                        min_x = min_x - 0.1
+            port = 1
         # if we are less than a pitch, just create a non-preferred layer jog
         non_preferred_route = max_x - min_x <= pitch
         half_layer_width = 0.5 * drc["minwidth_{0}".format(self.vertical_layer)]
@@ -368,6 +379,8 @@ class channel_route(design):
 
                 # Route each pin to the trunk
                 for pin in pins:
+                    debug.warning("pin name in net ----> {0}".format(pin.name))
+                    debug.warning("wmask or not --> {0}".format(OPTS.write_size))
                     # Find the correct side of the pin
                     if pin.cy() < trunk_offset.y:
                         pin_pos = pin.center()
