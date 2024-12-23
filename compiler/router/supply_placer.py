@@ -266,7 +266,7 @@ class supply_placer(router):
         source_center = moat_pin.center()
         if edge == "bottom":
             add_distance = self.via2_via3_pitch # if shift, need to fulfill via2-via3 spacing, top/bottom only
-            pin_too_close = any(abs(io_pin.center().x - source_center.x) < self.track_width for io_pin in self.io_pins_bottom)
+            pin_too_close = any(abs(io_pin.center().x - source_center.x) < (self.track_width + 0.1) for io_pin in self.io_pins_bottom)
             tmp_center = vector(source_center.x, source_center.y)
             while pin_too_close:
                 tmp_center = vector(source_center.x, source_center.y)
@@ -275,7 +275,7 @@ class supply_placer(router):
                     tmp_center = vector((tmp_center.x + add_distance), tmp_center.y)
                 else: # left shift
                     tmp_center = vector((tmp_center.x - add_distance), tmp_center.y)
-                pin_too_close = any(abs(io_pin.center().x - tmp_center.x) < self.track_width for io_pin in self.io_pins_bottom)
+                pin_too_close = any(abs(io_pin.center().x - tmp_center.x) < (self.track_width + 0.1) for io_pin in self.io_pins_bottom)
                 direction = - direction
             # the nearst vdd ring
             vdd_ring = self.new_pins["vdd"][1] # order in list -> "top", "bottom", "right", "left"]
@@ -353,7 +353,7 @@ class supply_placer(router):
                 moat_pin_route = graph_shape("vdd", rect, "m4")
                 self.moat_pins_top.append(moat_pin_route)
         elif edge == "left":
-            pin_too_close = any(abs(io_pin.center().y - source_center.y) < self.track_width for io_pin in self.io_pins_left)
+            pin_too_close = any(abs(io_pin.center().y - source_center.y) < (self.track_width + 0.1) for io_pin in self.io_pins_left)
             tmp_center = vector(source_center.x, source_center.y)
             while pin_too_close:
                 tmp_center = vector(source_center.x, source_center.y)
@@ -362,7 +362,7 @@ class supply_placer(router):
                     tmp_center = vector(tmp_center.x, (tmp_center.y + add_distance))
                 else: # down shift
                     tmp_center = vector(tmp_center.x, (tmp_center.y - add_distance))
-                pin_too_close = any(abs(io_pin.center().y - tmp_center.y) < self.track_width for io_pin in self.io_pins_left)
+                pin_too_close = any(abs(io_pin.center().y - tmp_center.y) < (self.track_width + 0.1) for io_pin in self.io_pins_left)
                 direction = - direction
             # the nearst vdd ring
             vdd_ring = self.new_pins["vdd"][3] # order in list -> "top", "bottom", "right", "left"]
@@ -396,7 +396,7 @@ class supply_placer(router):
                 moat_pin_route = graph_shape("vdd", rect, "m3")
                 self.moat_pins_left.append(moat_pin_route)
         else: #right
-            pin_too_close = any(abs(io_pin.center().y - source_center.y) < self.track_width for io_pin in self.io_pins_right)
+            pin_too_close = any(abs(io_pin.center().y - source_center.y) < (self.track_width + 0.1) for io_pin in self.io_pins_right)
             tmp_center = vector(source_center.x, source_center.y)
             while pin_too_close:
                 tmp_center = vector(source_center.x, source_center.y)
@@ -405,7 +405,7 @@ class supply_placer(router):
                     tmp_center = vector(tmp_center.x, (tmp_center.y + add_distance))
                 else: # down shift
                     tmp_center = vector(tmp_center.x, (tmp_center.y - add_distance))
-                pin_too_close = any(abs(io_pin.center().y - tmp_center.y) < self.track_width for io_pin in self.io_pins_right)
+                pin_too_close = any(abs(io_pin.center().y - tmp_center.y) < (self.track_width + 0.1) for io_pin in self.io_pins_right)
                 direction = - direction
             # the nearst vdd ring
             vdd_ring = self.new_pins["vdd"][2] # order in list -> "top", "bottom", "right", "left"]
@@ -750,6 +750,17 @@ class supply_placer(router):
             ring_pins = []
             ring_pins = self.new_pins[pin_name]
         for pin in pins:
+            # Special handle vdd/gnd in 1port sram(1rw), only at bank top-right is allowed
+            if len(self.design.all_ports) == 1:
+                # check if pin is inside bank area
+                if (self.design.bank_inst.lx() < pin.center().x < self.design.bank_inst.rx()) and (self.design.bank_inst.by() < pin.center().y < self.design.bank_inst.uy()):
+                    # add pin at top-right as candidate, not care the distance
+                    if (pin.center().x > self.design.bank_inst.rx() - 14) and (pin.center().y > self.design.bank_inst.uy() - 14):
+                        candidate_pins.append(pin)
+                        continue
+                    else:# pin in the other area of bank, do not care
+                        continue
+            # 2 port situation, or the other pins outer bank in 1port situation
             for ring_pin in ring_pins:
                 dist = pin.distance(ring_pin)
                 if max_distance is None or dist <= max_distance:
